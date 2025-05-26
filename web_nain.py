@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import sqlite3
+from datetime import datetime
 
 app = Flask(__name__)
 DATABASE = 'news.db'
@@ -13,9 +14,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
             news_time DATETIME NOT NULL,          -- 新聞時間
             news_title VARCHAR(50) NOT NULL,     -- 新聞標題
-            news_content TEXT NOT NULL,          -- 新聞內容
+            news_content TEXT,                   -- 新聞內容
             image_url TEXT,                      -- 圖片連結
-            news_url TEXT,                       -- 新聞連結
+            news_url TEXT NOT NULL,              -- 新聞連結
+            source_website VARCHAR(50) NOT NULL, -- 來源網站
             tags VARCHAR(100),                   -- 標籤
             author VARCHAR(50),                  -- 作者
             ai_title VARCHAR(50),                -- AI 標題
@@ -23,9 +25,11 @@ def init_db():
             ai_keywords VARCHAR(100),            -- AI 關鍵字
             ai_sentiment_analysis VARCHAR(10),   -- AI 語意分析
             ai_model VARCHAR(50),                -- AI 模型
-            ai_raw_content TEXT                  -- AI 原始內容
+            ai_raw_content TEXT,                 -- AI 原始內容
+            query_state INTEGER default 0        -- 查詢狀態
         );
         ''')
+
         conn.commit()
 
 # 資料庫連線
@@ -38,27 +42,86 @@ def get_db_connection():
 @app.route('/news', methods=['POST'])
 def add_news():
     data = request.get_json()
-    required_fields = ['news_time', 'news_title', 'news_content']
+
+    # 必填欄位
+    required_fields = ['news_time', 'news_title', 'news_url']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
 
+    # 轉換為 SQL 的時間格式
+    dt_object = datetime.strptime(data['news_time'], "%Y.%m.%d %H:%M")
+    data['news_time'] = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+
     with get_db_connection() as conn:
+        # 檢查是否已存在相同的時間和網址
         cursor = conn.cursor()
-        cursor.execute('''
-        INSERT INTO news (news_time, news_title, news_content, author, news_source, ai_title, ai_category, image_url, keywords, sentiment_analysis, ai_model, ai_raw_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data['news_time'], data['news_title'], data['news_content'],
-            data.get('author'), data.get('news_source'), data.get('ai_title'),
-            data.get('ai_category'), data.get('image_url'), data.get('keywords'),
-            data.get('sentiment_analysis'), data.get('ai_model'), data.get('ai_raw_content')
-        ))
+
+        sql_data = f'''SELECT * FROM news WHERE news_time = '{data['news_time']}' AND news_url = '{data["news_url"]}'; '''
+        cursor.execute(sql_data)
+        previous_news = cursor.fetchone()
+        if previous_news:
+            return jsonify({'error': 'News with the same time and URL already exists'}), 400
+
+        column_list = [
+            'news_time', 'news_title', 'news_content', 'image_url', 'news_url',
+            'source_website', 'tags', 'author', 'ai_title', 'ai_category',
+            'ai_keywords', 'ai_sentiment_analysis', 'ai_model', 'ai_raw_content', 'query_state'
+        ]
+        column_names = []
+        column_values = []
+
+        for name in column_list:
+            value = data.get(name)
+            if value:  # 過濾空值
+                column_names.append(name)
+                column_values.append(value)
+
+        # 動態生成佔位符
+        placeholders = ", ".join(["?" for _ in column_values])
+
+        # 組建 SQL 語句
+        sql_query = f'''
+        INSERT INTO news ({", ".join(column_names)})
+        VALUES ({placeholders});
+        '''
+        # 執行參數化查詢
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql_query, column_values)
+            conn.commit()
+
+        cursor.execute(sql_data)
         conn.commit()
         return jsonify({'message': 'News added successfully', 'id': cursor.lastrowid}), 201
 
+# 取得待爬清單
+@app.route('/get_wait_query_list', methods=['POST'])
+def get_wait_query_list():
+    data = request.get_json()
+    source_website = data.get('source_website')
+    count = data.get('count')
 
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        sql_query = """
+        SELECT id, news_url
+        FROM news
+        WHERE query_state = 0 AND source_website = ?
+        LIMIT ?;
+        """
+        cursor.execute(sql_query, (source_website, count))
 
+        news_obj = cursor.fetchall()
+        news_list = [news['id'] for news in news_obj]
+
+        placeholders = ", ".join(["?" for _ in news_list])
+
+        sql = f'UPDATE news SET query_state = 1 WHERE id in ({placeholders});'
+        cursor.execute(sql, news_list)
+        conn.commit()
+
+        return jsonify([dict(news) for news in news_obj])
 
 
 
@@ -77,36 +140,32 @@ def update_news(news_id):
     data = request.get_json()
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM news WHERE id = ?', (news_id,))
+        cursor.execute(f"SELECT * FROM news WHERE id = {news_id}")
         existing_news = cursor.fetchone()
         if not existing_news:
             return jsonify({'error': 'News not found'}), 404
 
-        update_fields = {
-            'news_time': data.get('news_time', existing_news['news_time']),
-            'news_title': data.get('news_title', existing_news['news_title']),
-            'news_content': data.get('news_content', existing_news['news_content']),
-            'author': data.get('author', existing_news['author']),
-            'news_source': data.get('news_source', existing_news['news_source']),
-            'ai_title': data.get('ai_title', existing_news['ai_title']),
-            'ai_category': data.get('ai_category', existing_news['ai_category']),
-            'image_url': data.get('image_url', existing_news['image_url']),
-            'keywords': data.get('keywords', existing_news['keywords']),
-            'sentiment_analysis': data.get('sentiment_analysis', existing_news['sentiment_analysis']),
-            'ai_model': data.get('ai_model', existing_news['ai_model']),
-            'ai_raw_content': data.get('ai_raw_content', existing_news['ai_raw_content']),
-        }
+        # 使用 dictionary 解壓來簡化更新欄位處理
+        update_fields = {**dict(existing_news), **data}
 
-        cursor.execute('''
+        update_query = f"""
         UPDATE news
-        SET news_time = ?, news_title = ?, news_content = ?, author = ?, news_source = ?, ai_title = ?, ai_category = ?, image_url = ?, keywords = ?, sentiment_analysis = ?, ai_model = ?, ai_raw_content = ?
-        WHERE id = ?
-        ''', (
-            update_fields['news_time'], update_fields['news_title'], update_fields['news_content'],
-            update_fields['author'], update_fields['news_source'], update_fields['ai_title'],
-            update_fields['ai_category'], update_fields['image_url'], update_fields['keywords'],
-            update_fields['sentiment_analysis'], update_fields['ai_model'], update_fields['ai_raw_content'], news_id
-        ))
+        SET
+            news_time = '{update_fields['news_time']}',
+            news_title = '{update_fields['news_title']}',
+            news_content = '{update_fields['news_content']}',
+            author = '{update_fields['author']}',
+            news_url = '{update_fields['news_url']}',
+            ai_title = '{update_fields['ai_title']}',
+            ai_category = '{update_fields['ai_category']}',
+            image_url = '{update_fields['image_url']}',
+            ai_keywords = '{update_fields.get('ai_keywords')}',
+            ai_sentiment_analysis = '{update_fields.get('ai_sentiment_analysis')}',
+            ai_model = '{update_fields.get('ai_model')}',
+            ai_raw_content = '{update_fields.get('ai_raw_content')}'
+        WHERE id = {news_id}
+        """
+        cursor.execute(update_query)
         conn.commit()
         return jsonify({'message': 'News updated successfully'})
 
