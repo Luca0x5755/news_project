@@ -45,10 +45,12 @@ def get_ttv_news():
         title = soup.select("h1.mb-ht-hf")[0].text.strip()
         title = re.sub(r'\u3000', ' ', title)
 
+        # 類別
+        category = soup.select("div#crumbs li")[-1].text
+
         # 標籤
         ul = soup.select("ul.news-status > ul.tag li")
         tags = ', '.join([li.text for li in ul]) if len(ul) > 0 else ''
-
 
         # 抓取圖片
         imgs = soup.select("article#contentarea img")
@@ -57,13 +59,16 @@ def get_ttv_news():
 
         # 內文
         p = soup.select("div#newscontent > p")
-        content = ''
-        for x in p:
-            content += f"\n{x.text}"
+        content = '\n'.join([x.text for x in p])
 
         # 抓取編輯
         author = re.search(r'責任編輯／([\u4e00-\u9fff]+)', content)[1]
 
-        json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'tags': tags, 'author': author, 'query_state': 2}
+        json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'tags': tags, 'category': category, 'author': author, 'query_state': 2}
         response = req.put(f'http://127.0.0.1:5000/news/{query_data['id']}', json=json_data)
+        print('id:', query_data['id'], response.reason)
         time.sleep(1)
+
+if __name__ == '__main__':
+    # get_ttv_news_list()
+    get_ttv_news()

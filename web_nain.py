@@ -18,6 +18,7 @@ def init_db():
             image_url TEXT,                      -- 圖片連結
             news_url TEXT NOT NULL,              -- 新聞連結
             source_website VARCHAR(50) NOT NULL, -- 來源網站
+            category VARCHAR(10),                -- AI 分類
             tags VARCHAR(100),                   -- 標籤
             author VARCHAR(50),                  -- 作者
             ai_title VARCHAR(50),                -- AI 標題
@@ -65,7 +66,7 @@ def add_news():
 
         column_list = [
             'news_time', 'news_title', 'news_content', 'image_url', 'news_url',
-            'source_website', 'tags', 'author', 'ai_title', 'ai_category',
+            'source_website', 'category', 'tags', 'author', 'ai_title', 'ai_category',
             'ai_keywords', 'ai_sentiment_analysis', 'ai_model', 'ai_raw_content', 'query_state'
         ]
         column_names = []
@@ -139,7 +140,7 @@ def update_news(news_id):
     data = request.get_json()
     column_list = [
         'news_time', 'news_title', 'news_content', 'image_url', 'news_url',
-        'source_website', 'tags', 'author', 'ai_title', 'ai_category',
+        'source_website', 'category', 'tags', 'author', 'ai_title', 'ai_category',
         'ai_keywords', 'ai_sentiment_analysis', 'ai_model', 'ai_raw_content', 'query_state'
     ]
 
