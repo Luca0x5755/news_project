@@ -124,7 +124,6 @@ def get_wait_query_list():
         return jsonify([dict(news) for news in news_obj])
 
 
-
 # 查看新聞
 @app.route('/news', methods=['GET'])
 def get_news():
@@ -138,35 +137,37 @@ def get_news():
 @app.route('/news/<int:news_id>', methods=['PUT'])
 def update_news(news_id):
     data = request.get_json()
+    column_list = [
+        'news_time', 'news_title', 'news_content', 'image_url', 'news_url',
+        'source_website', 'tags', 'author', 'ai_title', 'ai_category',
+        'ai_keywords', 'ai_sentiment_analysis', 'ai_model', 'ai_raw_content', 'query_state'
+    ]
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"SELECT * FROM news WHERE id = {news_id}")
+        cursor.execute("SELECT * FROM news WHERE id = ?", (news_id,))
         existing_news = cursor.fetchone()
         if not existing_news:
             return jsonify({'error': 'News not found'}), 404
 
-        # 使用 dictionary 解壓來簡化更新欄位處理
-        update_fields = {**dict(existing_news), **data}
+        # 過濾有效欄位
+        column_names = []
+        column_values = []
+        for name in column_list:
+            if name in data:
+                column_names.append(name)
+                column_values.append(data[name])
 
-        update_query = f"""
-        UPDATE news
-        SET
-            news_time = '{update_fields['news_time']}',
-            news_title = '{update_fields['news_title']}',
-            news_content = '{update_fields['news_content']}',
-            author = '{update_fields['author']}',
-            news_url = '{update_fields['news_url']}',
-            ai_title = '{update_fields['ai_title']}',
-            ai_category = '{update_fields['ai_category']}',
-            image_url = '{update_fields['image_url']}',
-            ai_keywords = '{update_fields.get('ai_keywords')}',
-            ai_sentiment_analysis = '{update_fields.get('ai_sentiment_analysis')}',
-            ai_model = '{update_fields.get('ai_model')}',
-            ai_raw_content = '{update_fields.get('ai_raw_content')}'
-        WHERE id = {news_id}
-        """
-        cursor.execute(update_query)
+        # 如果無欄位需要更新
+        if not column_names:
+            return jsonify({'error': 'No valid fields to update'}), 400
+
+        # 動態生成更新的 SQL 語句
+        set_clause = ', '.join([f"{col} = ?" for col in column_names])
+        update_query = f"UPDATE news SET {set_clause} WHERE id = ?"
+        cursor.execute(update_query, column_values + [news_id])
         conn.commit()
+
         return jsonify({'message': 'News updated successfully'})
 
 if __name__ == '__main__':
