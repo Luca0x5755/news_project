@@ -18,9 +18,9 @@ def init_db():
             image_url TEXT,                      -- 圖片連結
             news_url TEXT NOT NULL,              -- 新聞連結
             source_website VARCHAR(50) NOT NULL, -- 來源網站
-            category VARCHAR(10),                -- AI 分類
             tags VARCHAR(100),                   -- 標籤
             author VARCHAR(50),                  -- 作者
+            category VARCHAR(10),                -- AI 分類
             ai_title VARCHAR(50),                -- AI 標題
             ai_category VARCHAR(10),             -- AI 分類
             ai_keywords VARCHAR(100),            -- AI 關鍵字
@@ -30,8 +30,6 @@ def init_db():
             query_state INTEGER default 0        -- 查詢狀態
         );
         ''')
-
-        conn.commit()
 
 # 資料庫連線
 def get_db_connection():
@@ -172,5 +170,5 @@ def update_news(news_id):
         return jsonify({'message': 'News updated successfully'})
 
 if __name__ == '__main__':
-    # init_db()
-    app.run(debug=True)
+    init_db()
+    # app.run(debug=True)
