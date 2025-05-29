@@ -16,10 +16,10 @@ def get_ttv_news_list():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.82 Safari/537.36'
     }
 
-    for i in range(1, 11):
+    for i in range(1, 2):
         req_news = []
         # 政治, 國際, 社會
-        res = requests.get(f'https://news.ttv.com.tw/category/社會/{i}', headers=my_headers)
+        res = requests.get(f'https://news.ttv.com.tw/category/國際/{i}', headers=my_headers)
         soup = BeautifulSoup(res.text, 'lxml')
         news_list = soup.select('article.container a')
         for news in news_list:
@@ -87,7 +87,7 @@ def get_ttv_news():
         response = requests.put(f'http://127.0.0.1:5000/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
 
-        time.sleep(random.randint(1,3))
+        time.sleep(random.randint(1,10))
     return 1
 
 if __name__ == '__main__':

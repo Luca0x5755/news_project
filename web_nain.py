@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
 import sqlite3
+import traceback
 
 app = Flask(__name__)
 DATABASE = 'news.db'
+
 SOURCE_WEBSITE_ENUM = {
     1: "台視",
 }
@@ -22,6 +24,14 @@ AI_MODEL_ENUM = {
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
+        # author 表
+        cursor.execute('''
+        CREATE TABLE author (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, -- 作者唯一識別碼
+            name VARCHAR(50) NOT NULL,            -- 作者姓名
+            notes TEXT                            -- 備註
+        );
+        ''')
 
         # news 表
         cursor.execute('''
@@ -33,7 +43,9 @@ def init_db():
             image_url TEXT,                       -- 圖片連結
             news_url TEXT NOT NULL,               -- 新聞連結
             source_website INTEGER NOT NULL,      -- 來源網站
-            query_state INTEGER DEFAULT 0         -- 查詢狀態 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
+            author_id INTEGER,                    -- 作者
+            query_state INTEGER DEFAULT 0,        -- 查詢狀態 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
+            FOREIGN KEY(author_id) REFERENCES author(id)
         );
         ''')
 
@@ -72,15 +84,6 @@ def init_db():
             category_id INTEGER NOT NULL,         -- 關聯類別 ID
             FOREIGN KEY(news_id) REFERENCES news(id),
             FOREIGN KEY(category_id) REFERENCES category(id)
-        );
-        ''')
-
-        # author 表
-        cursor.execute('''
-        CREATE TABLE author (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, -- 作者唯一識別碼
-            name VARCHAR(50) NOT NULL,            -- 作者姓名
-            notes TEXT                            -- 備註
         );
         ''')
 
@@ -145,57 +148,14 @@ def construct_insert_query(table_name, data):
 # 新增新聞
 @app.route('/news', methods=['POST'])
 def add_news():
-    '''
-    新增多筆新聞資料到資料庫
-
-    輸入:
-        - JSON 格式的清單，每筆資料為一個新聞物件，包含以下欄位：
-            - news_time (必填): 新聞發佈時間，格式為 ISO 8601 (e.g., "2025-05-29T12:00:00")
-            - news_title (必填): 新聞標題，字串格式
-            - news_url (必填): 新聞的網址，字串格式
-            - news_content (選填): 新聞內容，字串格式
-            - image_url (選填): 圖片連結，字串格式
-            - source_website (必填): 來源網站，整數對應枚舉值 (e.g., 1: "台視")
-            - query_state (選填): 查詢狀態，預設為 0 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
-
-    輸出:
-        - 成功狀況:
-            - 狀態碼: 201
-            - 回傳 JSON:
-                {
-                    "success": [
-                        {
-                            "data": <成功寫入的新聞資料>,
-                            "id": <新聞資料的主鍵 ID>
-                        },
-                        ...
-                    ],
-                    "errors": [
-                        {
-                            "data": <有問題的新聞資料>,
-                            "error": <錯誤訊息>
-                        },
-                        ...
-                    ]
-                }
-        - 錯誤狀況:
-            - 狀態碼: 400
-            - 回傳 JSON:
-                {
-                    "error": "描述錯誤原因"
-                }
-    '''
-
     data_list = request.get_json()
 
     if not isinstance(data_list, list):
         return jsonify({'error': 'Input data should be a list of news objects'}), 400
 
-
     # 必填欄位
     required_fields = ['news_time', 'news_title', 'news_url', 'source_website']
     results = {'success': [], 'errors': []}
-
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -230,22 +190,9 @@ def add_news():
 
     return jsonify(results), 201
 
+# 更新新聞
 @app.route('/news/<int:news_id>', methods=['PUT'])
 def update_news(news_id):
-    '''
-    更新新聞資料，並將 keywords 和 category 新增及關聯
-
-    輸入:
-        - JSON 格式物件，包括：
-            - news 的欄位 (可選): news_time, news_title, news_content, image_url, news_url, source_website, query_state
-            - keywords (可選): 關鍵字清單
-            - category (可選): 類別清單
-
-    輸出:
-        - 成功: 狀態碼 200，回傳更新成功訊息
-        - 錯誤: 狀態碼 404 或 400
-    '''
-
     data = request.get_json()
     column_list = [
         'news_time', 'news_title', 'news_content', 'image_url',
@@ -270,6 +217,17 @@ def update_news(news_id):
         if 'source_website' in valid_data:
             if valid_data['source_website'] not in SOURCE_WEBSITE_ENUM:
                 return jsonify({'error': 'Invalid source_website value'}), 400
+
+        if 'author' in data:
+            cursor.execute("SELECT id FROM author WHERE name = ?", (data['author'],))
+            author_record = cursor.fetchone()
+            if not author_record:
+                cursor.execute("INSERT INTO author (name) VALUES (?)", (data['author'],))
+                conn.commit()
+                author_id = cursor.lastrowid
+            else:
+                author_id = author_record['id']
+            valid_data['author_id'] = author_id
 
         # 更新 news 表資料
         if valid_data:
@@ -321,18 +279,6 @@ def update_news(news_id):
 # 取得代查詢清單
 @app.route('/wait_query_list', methods=['POST'])
 def wait_query_list():
-    '''
-    取得待爬清單
-
-    輸入:
-        - JSON 格式物件，包括:
-            - source_website (int): 資料來源編號
-            - count (int): 需要的資料筆數
-
-    輸出:
-        - 成功: 狀態碼 200，回傳待爬清單
-        - 錯誤: 狀態碼 400
-    '''
     data = request.get_json()
 
     try:
@@ -369,7 +315,7 @@ def wait_query_list():
         news_list = [{"id": news["id"], "news_url": news["news_url"]} for news in news_obj]
         return jsonify(news_list), 200
 
-# 查看新聞
+# 需要ai處理的新聞
 @app.route('/wait_ai_handle_list', methods=['post'])
 def wait_ai_handle_list():
     data = request.get_json()
@@ -406,7 +352,7 @@ def add_ai_news():
             return jsonify({"error": "Invalid data"}), 400
 
         # 連接資料庫
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
 
             # 新增 ai_news
@@ -418,48 +364,47 @@ def add_ai_news():
             VALUES (?, ?, ?, ?)
             ''', (news_id, title, sentiment_analysis_key, ai_model_key))
 
+            conn.commit()
             ai_news_id = cursor.lastrowid
 
-            # 新增 category
+            # 新增 category 並與 ai_news_category 關聯
             for category in categories:
-                cursor.execute('''
-                INSERT OR IGNORE INTO category (name) VALUES (?)
-                ''', (category,))
+                # 檢查 category 是否已存在
+                cursor.execute("SELECT id FROM category WHERE name = ?", (category,))
+                category_record = cursor.fetchone()
 
-                cursor.execute('''
-                SELECT id FROM category WHERE name = ?
-                ''', (category,))
+                if not category_record:
+                    cursor.execute("INSERT INTO category (name) VALUES (?)", (category,))
+                    category_id = cursor.lastrowid
+                else:
+                    category_id = category_record['id']
 
-                category_id = cursor.fetchone()[0]
+                # 建立 ai_news_category 關聯
+                cursor.execute("INSERT INTO ai_news_category (ai_news_id, category_id) VALUES (?, ?)", (ai_news_id, category_id))
 
-                cursor.execute('''
-                INSERT INTO ai_news_category (ai_news_id, category_id) VALUES (?, ?)
-                ''', (ai_news_id, category_id))
-
-            # 新增 keyword
+            # 新增 keywords 並與 ai_news_keyword 關聯
             for keyword in keywords:
-                cursor.execute('''
-                INSERT OR IGNORE INTO keyword (name) VALUES (?)
-                ''', (keyword,))
+                # 檢查 keyword 是否已存在
+                cursor.execute("SELECT id FROM keyword WHERE name = ?", (keyword,))
+                keyword_record = cursor.fetchone()
 
-                cursor.execute('''
-                SELECT id FROM keyword WHERE name = ?
-                ''', (keyword,))
+                if not keyword_record:
+                    cursor.execute("INSERT INTO keyword (name) VALUES (?)", (keyword,))
+                    keyword_id = cursor.lastrowid
+                else:
+                    keyword_id = keyword_record['id']
 
-                keyword_id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO ai_news_keyword (ai_news_id, keyword_id) VALUES (?, ?)", (ai_news_id, keyword_id))
 
-                cursor.execute('''
-                INSERT INTO ai_news_keyword (ai_news_id, keyword_id) VALUES (?, ?)
-                ''', (ai_news_id, keyword_id))
-
+            # 所有操作完成後手動提交
             conn.commit()
 
         return jsonify({"message": "AI news added successfully"}), 201
 
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     # init_db()
-    app.run(debug=True)
+    app.run()# debug=True
