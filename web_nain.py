@@ -7,6 +7,17 @@ SOURCE_WEBSITE_ENUM = {
     1: "台視",
 }
 
+SENTIMENT_ANALYSIS_ENUM = {
+    0: "中立",
+    1: "正面",
+    2: "負面",
+}
+
+AI_MODEL_ENUM = {
+    1: "gemma3:12b-it-qat",
+}
+
+
 # 初始化資料庫
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
@@ -17,12 +28,12 @@ def init_db():
         CREATE TABLE news (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
             news_time DATETIME NOT NULL,          -- 新聞時間
-            news_title VARCHAR(50) NOT NULL,     -- 新聞標題
-            news_content TEXT,                   -- 新聞內容
-            image_url TEXT,                      -- 圖片連結
-            news_url TEXT NOT NULL,              -- 新聞連結
-            source_website INTEGER NOT NULL, -- 來源網站
-            query_state INTEGER DEFAULT 0        -- 查詢狀態 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
+            news_title VARCHAR(50) NOT NULL,      -- 新聞標題
+            news_content TEXT,                    -- 新聞內容
+            image_url TEXT,                       -- 圖片連結
+            news_url TEXT NOT NULL,               -- 新聞連結
+            source_website INTEGER NOT NULL,      -- 來源網站
+            query_state INTEGER DEFAULT 0         -- 查詢狀態 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
         );
         ''')
 
@@ -30,7 +41,7 @@ def init_db():
         cursor.execute('''
         CREATE TABLE keyword (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 關鍵字唯一識別碼
-            name VARCHAR(50) NOT NULL            -- 關鍵字名稱
+            name VARCHAR(50) NOT NULL             -- 關鍵字名稱
         );
         ''')
 
@@ -38,8 +49,8 @@ def init_db():
         cursor.execute('''
         CREATE TABLE news_keyword (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            news_id INTEGER NOT NULL,            -- 關聯新聞 ID
-            keyword_id INTEGER NOT NULL,         -- 關聯關鍵字 ID
+            news_id INTEGER NOT NULL,             -- 關聯新聞 ID
+            keyword_id INTEGER NOT NULL,          -- 關聯關鍵字 ID
             FOREIGN KEY(news_id) REFERENCES news(id),
             FOREIGN KEY(keyword_id) REFERENCES keyword(id)
         );
@@ -49,7 +60,7 @@ def init_db():
         cursor.execute('''
         CREATE TABLE category (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 類別唯一識別碼
-            name VARCHAR(50) NOT NULL            -- 類別名稱
+            name VARCHAR(50) NOT NULL             -- 類別名稱
         );
         ''')
 
@@ -57,8 +68,8 @@ def init_db():
         cursor.execute('''
         CREATE TABLE news_category (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            news_id INTEGER NOT NULL,            -- 關聯新聞 ID
-            category_id INTEGER NOT NULL,        -- 關聯類別 ID
+            news_id INTEGER NOT NULL,             -- 關聯新聞 ID
+            category_id INTEGER NOT NULL,         -- 關聯類別 ID
             FOREIGN KEY(news_id) REFERENCES news(id),
             FOREIGN KEY(category_id) REFERENCES category(id)
         );
@@ -68,20 +79,19 @@ def init_db():
         cursor.execute('''
         CREATE TABLE author (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 作者唯一識別碼
-            name VARCHAR(50) NOT NULL,           -- 作者姓名
-            notes TEXT                           -- 備註
+            name VARCHAR(50) NOT NULL,            -- 作者姓名
+            notes TEXT                            -- 備註
         );
         ''')
 
         # ai_news 表
         cursor.execute('''
         CREATE TABLE ai_news (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            news_id INTEGER NOT NULL,            -- 關聯新聞 ID
-            ai_title VARCHAR(50),               -- AI 標題
-            ai_sentiment_analysis VARCHAR(10),  -- AI 語意分析 (正面、負面、中立)
-            ai_model VARCHAR(50),               -- AI 模型 (gemma3、llama4)
-            ai_raw_content TEXT,                -- AI 原始內容
+            id INTEGER PRIMARY KEY AUTOINCREMENT,    -- 唯一識別碼
+            news_id INTEGER NOT NULL,                -- 關聯新聞 ID
+            ai_title VARCHAR(50),                    -- AI 標題
+            ai_sentiment_analysis INTEGER NOT NULL,  -- AI 語意分析 (0:中立、1:正面、2:負面)
+            ai_model INTEGER NOT NULL,               -- AI 模型 (1:gemma3:12b-it-qat、)
             FOREIGN KEY(news_id) REFERENCES news(id)
         );
         ''')
@@ -90,8 +100,8 @@ def init_db():
         cursor.execute('''
         CREATE TABLE ai_news_keyword (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            ai_news_id INTEGER NOT NULL,         -- 關聯 AI 新聞 ID
-            keyword_id INTEGER NOT NULL,         -- 關聯關鍵字 ID
+            ai_news_id INTEGER NOT NULL,          -- 關聯 AI 新聞 ID
+            keyword_id INTEGER NOT NULL,          -- 關聯關鍵字 ID
             FOREIGN KEY(ai_news_id) REFERENCES ai_news(id),
             FOREIGN KEY(keyword_id) REFERENCES keyword(id)
         );
@@ -101,8 +111,8 @@ def init_db():
         cursor.execute('''
         CREATE TABLE ai_news_category (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            ai_news_id INTEGER NOT NULL,         -- 關聯 AI 新聞 ID
-            category_id INTEGER NOT NULL,        -- 關聯類別 ID
+            ai_news_id INTEGER NOT NULL,          -- 關聯 AI 新聞 ID
+            category_id INTEGER NOT NULL,         -- 關聯類別 ID
             FOREIGN KEY(ai_news_id) REFERENCES ai_news(id),
             FOREIGN KEY(category_id) REFERENCES category(id)
         );
@@ -308,8 +318,9 @@ def update_news(news_id):
 
         return jsonify({'message': 'News updated successfully'}), 200
 
-@app.route('/get_wait_query_list', methods=['POST'])
-def get_wait_query_list():
+# 取得代查詢清單
+@app.route('/wait_query_list', methods=['POST'])
+def wait_query_list():
     '''
     取得待爬清單
 
@@ -359,13 +370,95 @@ def get_wait_query_list():
         return jsonify(news_list), 200
 
 # 查看新聞
-@app.route('/news', methods=['GET'])
-def get_news():
+@app.route('/wait_ai_handle_list', methods=['post'])
+def wait_ai_handle_list():
+    data = request.get_json()
+    count = int(data.get('count'))
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM news')
+        sql_query = '''
+            SELECT news.id id, news.news_content news_content
+            FROM news
+            LEFT JOIN ai_news ON news.id = ai_news.news_id
+            WHERE news.query_state = 2 AND ai_news.news_id IS NULL
+            LIMIT ?;
+        '''
+        cursor.execute(sql_query, (count,))
         news_list = cursor.fetchall()
         return jsonify([dict(news) for news in news_list])
+
+# 寫入AI新聞
+@app.route('/add_ai_news', methods=['POST'])
+def add_ai_news():
+    try:
+        data = request.get_json()
+
+        # 取得資料
+        title = data.get('title')
+        categories = data.get('category', [])
+        keywords = data.get('keyword', [])
+        sentiment_analysis = data.get('sentiment_analysis')
+        news_id = int(data.get('news_id'))
+
+        # 驗證資料
+        if not title or not categories or not keywords or sentiment_analysis not in SENTIMENT_ANALYSIS_ENUM.values() or not news_id:
+            return jsonify({"error": "Invalid data"}), 400
+
+        # 連接資料庫
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+
+            # 新增 ai_news
+            sentiment_analysis_key = next(key for key, value in SENTIMENT_ANALYSIS_ENUM.items() if value == sentiment_analysis)
+            ai_model_key = next(iter(AI_MODEL_ENUM))  # 預設使用第一個 AI 模型
+
+            cursor.execute('''
+            INSERT INTO ai_news (news_id, ai_title, ai_sentiment_analysis, ai_model)
+            VALUES (?, ?, ?, ?)
+            ''', (news_id, title, sentiment_analysis_key, ai_model_key))
+
+            ai_news_id = cursor.lastrowid
+
+            # 新增 category
+            for category in categories:
+                cursor.execute('''
+                INSERT OR IGNORE INTO category (name) VALUES (?)
+                ''', (category,))
+
+                cursor.execute('''
+                SELECT id FROM category WHERE name = ?
+                ''', (category,))
+
+                category_id = cursor.fetchone()[0]
+
+                cursor.execute('''
+                INSERT INTO ai_news_category (ai_news_id, category_id) VALUES (?, ?)
+                ''', (ai_news_id, category_id))
+
+            # 新增 keyword
+            for keyword in keywords:
+                cursor.execute('''
+                INSERT OR IGNORE INTO keyword (name) VALUES (?)
+                ''', (keyword,))
+
+                cursor.execute('''
+                SELECT id FROM keyword WHERE name = ?
+                ''', (keyword,))
+
+                keyword_id = cursor.fetchone()[0]
+
+                cursor.execute('''
+                INSERT INTO ai_news_keyword (ai_news_id, keyword_id) VALUES (?, ?)
+                ''', (ai_news_id, keyword_id))
+
+            conn.commit()
+
+        return jsonify({"message": "AI news added successfully"}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     # init_db()
