@@ -16,26 +16,28 @@ def get_ttv_news_list():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.82 Safari/537.36'
     }
 
-    for i in range(1, 2):
-        req_news = []
-        # 政治, 國際, 社會
-        res = requests.get(f'https://news.ttv.com.tw/category/國際/{i}', headers=my_headers)
-        soup = BeautifulSoup(res.text, 'lxml')
-        news_list = soup.select('article.container a')
-        for news in news_list:
-            news_title = news.select('div.title')[0].text.strip()
-            news_time = news.select('div.time')[0].text.strip()
-            news_time = format_datetime(news_time)
-            link = news['href']
-            # print(f'標題: {news_title}')
-            # print(f'時間: {news_time}')
-            # print(f'連結: {link}')
+    category_list = ['政治', '國際', '社會', '娛樂', '生活', '氣象', '地方', '健康', '體育', '財經']
+    for i in range(10, 20):
+        for category in category_list:
+            req_news = []
+            # 政治, 國際, 社會
+            res = requests.get(f'https://news.ttv.com.tw/category/{category}/{i}', headers=my_headers)
+            soup = BeautifulSoup(res.text, 'lxml')
+            news_list = soup.select('article.container a')
+            for news in news_list:
+                news_title = news.select('div.title')[0].text.strip()
+                news_time = news.select('div.time')[0].text.strip()
+                news_time = format_datetime(news_time)
+                link = news['href']
+                # print(f'標題: {news_title}')
+                # print(f'時間: {news_time}')
+                # print(f'連結: {link}')
 
-            req_news.append({'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': 1})
-        res = requests.post('http://127.0.0.1:5000/news', json=req_news)
-        print(req_news)
-        # print(res.text)
-        time.sleep(random.randint(1,3))
+                req_news.append({'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': 1})
+            res = requests.post('http://127.0.0.1:5000/news', json=req_news)
+            print(req_news)
+            print(json.loads(res.text))
+            time.sleep(random.randint(1,3))
 
 
 def get_ttv_news():
@@ -81,17 +83,18 @@ def get_ttv_news():
         content = '\n'.join([x.text for x in p])
 
         # 抓取編輯
-        author = re.search(r'責任編輯／([\u4e00-\u9fff]+)', content)[1]
+        author = re.search(r'責任編輯／([\u4e00-\u9fff]+)', content)
+        author = author[1] if author else None
 
         json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'query_state': 2}
         response = requests.put(f'http://127.0.0.1:5000/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
 
-        time.sleep(random.randint(1,10))
+        time.sleep(random.randint(2,7))
     return 1
 
 if __name__ == '__main__':
-    get_ttv_news_list()
+    # get_ttv_news_list()
     while True:
         is_wait_qurey = get_ttv_news()
         if is_wait_qurey == 0:
