@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 import time
 import json
 import re
+from datetime import datetime
+
+def format_datetime(news_time):
+    dt_object = datetime.strptime(news_time, "%Y.%m.%d %H:%M")
+    return dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
 def get_ttv_news_list():
     # 取新聞清單
@@ -11,6 +16,7 @@ def get_ttv_news_list():
     }
 
     for i in range(1, 2):
+        req_news = []
         # 政治
         res = req.get(f'https://news.ttv.com.tw/category/國際/{i}', headers=my_headers)
         soup = BeautifulSoup(res.text, 'lxml')
@@ -18,17 +24,22 @@ def get_ttv_news_list():
         for news in news_list:
             news_title = news.select('div.title')[0].text.strip()
             news_time = news.select('div.time')[0].text.strip()
+            news_time = format_datetime(news_time)
             link = news['href']
             print(f'標題: {news_title}')
             print(f'時間: {news_time}')
             print(f'連結: {link}')
-            req.post('http://127.0.0.1:5000/news', json={'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': '台視'})
-        print(f'第{i}頁結束')
+
+            req_news.append({'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': 1})
+        res = req.post('http://127.0.0.1:5000/news', json=req_news)
+        print(req_news)
+        print(res.text)
         time.sleep(1)
+
 
 def get_ttv_news():
     # 取得待爬清單
-    res = req.post('http://127.0.0.1:5000/get_wait_query_list', json={'source_website': '台視', 'count': 10})
+    res = req.post('http://127.0.0.1:5000/get_wait_query_list', json={'source_website': 1, 'count': 1})
     query_list = json.loads(res.text)
 
     # 取新聞內容
@@ -40,17 +51,17 @@ def get_ttv_news():
         res = req.get(query_data['news_url'], headers=my_headers)
         soup = BeautifulSoup(res.text, 'lxml')
 
-
         # 標題
         title = soup.select("h1.mb-ht-hf")[0].text.strip()
         title = re.sub(r'\u3000', ' ', title)
 
         # 類別
-        category = soup.select("div#crumbs li")[-1].text
+        category = [soup.select("div#crumbs li")[-1].text]
 
         # 標籤
         ul = soup.select("ul.news-status > ul.tag li")
-        tags = ', '.join([li.text for li in ul]) if len(ul) > 0 else ''
+        keywords = [li.text for li in ul]
+        print(keywords)
 
         # 抓取圖片
         imgs = soup.select("article#contentarea img")
@@ -64,10 +75,10 @@ def get_ttv_news():
         # 抓取編輯
         author = re.search(r'責任編輯／([\u4e00-\u9fff]+)', content)[1]
 
-        json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'tags': tags, 'category': category, 'author': author, 'query_state': 2}
+        json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'query_state': 2}
         response = req.put(f'http://127.0.0.1:5000/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
-        time.sleep(1)
+
 
 if __name__ == '__main__':
     # get_ttv_news_list()

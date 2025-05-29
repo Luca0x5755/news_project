@@ -1,12 +1,8 @@
 from flask import Flask, request, jsonify
 import sqlite3
-from datetime import datetime
-import enum
 
 app = Flask(__name__)
 DATABASE = 'news.db'
-
-
 SOURCE_WEBSITE_ENUM = {
     1: "台視",
 }
@@ -112,7 +108,6 @@ def init_db():
         );
         ''')
 
-
 # 資料庫連線
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
@@ -124,7 +119,6 @@ def validate_required_fields(data, required_fields):
         if field not in data:
             return field
     return None
-
 
 def check_existing_news(cursor, news_time, news_url):
     sql_query = "SELECT * FROM news WHERE news_time = ? AND news_url = ?;"
@@ -138,7 +132,7 @@ def construct_insert_query(table_name, data):
     sql_query = f"INSERT INTO {table_name} ({', '.join(column_names)}) VALUES ({placeholders});"
     return sql_query, column_values
 
-
+# 新增新聞
 @app.route('/news', methods=['POST'])
 def add_news():
     '''
@@ -151,7 +145,7 @@ def add_news():
             - news_url (必填): 新聞的網址，字串格式
             - news_content (選填): 新聞內容，字串格式
             - image_url (選填): 圖片連結，字串格式
-            - source_website (選填): 來源網站，整數對應枚舉值 (e.g., 0: "台視")
+            - source_website (必填): 來源網站，整數對應枚舉值 (e.g., 1: "台視")
             - query_state (選填): 查詢狀態，預設為 0 (0: 有清單沒內容, 1: 查詢中, 2: 有內容)
 
     輸出:
@@ -226,20 +220,32 @@ def add_news():
 
     return jsonify(results), 201
 
-
-
-# 修改新聞
 @app.route('/news/<int:news_id>', methods=['PUT'])
 def update_news(news_id):
+    '''
+    更新新聞資料，並將 keywords 和 category 新增及關聯
+
+    輸入:
+        - JSON 格式物件，包括：
+            - news 的欄位 (可選): news_time, news_title, news_content, image_url, news_url, source_website, query_state
+            - keywords (可選): 關鍵字清單
+            - category (可選): 類別清單
+
+    輸出:
+        - 成功: 狀態碼 200，回傳更新成功訊息
+        - 錯誤: 狀態碼 404 或 400
+    '''
+
     data = request.get_json()
     column_list = [
-        'news_time', 'news_title', 'news_content', 'image_url', 'news_url',
-        'source_website', 'category', 'keywords', 'author', 'ai_title', 'ai_category',
-        'ai_keywords', 'ai_sentiment_analysis', 'ai_model', 'ai_raw_content', 'query_state'
+        'news_time', 'news_title', 'news_content', 'image_url',
+        'news_url', 'source_website', 'query_state'
     ]
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # 檢查是否存在指定 ID 的新聞
         cursor.execute("SELECT * FROM news WHERE id = ?", (news_id,))
         existing_news = cursor.fetchone()
         if not existing_news:
@@ -247,27 +253,90 @@ def update_news(news_id):
 
         # 過濾有效欄位
         valid_data = {key: data[key] for key in column_list if key in data}
-        if not valid_data:
+        if not valid_data and 'keywords' not in data and 'category' not in data:
             return jsonify({'error': 'No valid fields to update'}), 400
 
-        # 動態生成更新的 SQL 語句
-        set_clause = ', '.join([f"{key} = ?" for key in valid_data.keys()])
-        update_query = f"UPDATE news SET {set_clause} WHERE id = ?"
-        cursor.execute(update_query, list(valid_data.values()) + [news_id])
-        conn.commit()
+        # 檢查 source_website 是否有效
+        if 'source_website' in valid_data:
+            if valid_data['source_website'] not in SOURCE_WEBSITE_ENUM:
+                return jsonify({'error': 'Invalid source_website value'}), 400
 
-        return jsonify({'message': 'News updated successfully'})
+        # 更新 news 表資料
+        if valid_data:
+            set_clause = ', '.join([f"{key} = ?" for key in valid_data.keys()])
+            update_query = f"UPDATE news SET {set_clause} WHERE id = ?"
+            cursor.execute(update_query, list(valid_data.values()) + [news_id])
+            conn.commit()
 
+        # 新增 keywords 並與 news_keyword 關聯
+        if 'keywords' in data:
+            for keyword in data['keywords']:
+                # 檢查 keyword 是否已存在
+                cursor.execute("SELECT id FROM keyword WHERE name = ?", (keyword,))
+                keyword_record = cursor.fetchone()
+                if not keyword_record:
+                    cursor.execute("INSERT INTO keyword (name) VALUES (?)", (keyword,))
+                    conn.commit()
+                    keyword_id = cursor.lastrowid
+                else:
+                    keyword_id = keyword_record['id']
 
-# 取得待爬清單
+                # 建立 news_keyword 關聯
+                cursor.execute("SELECT * FROM news_keyword WHERE news_id = ? AND keyword_id = ?", (news_id, keyword_id))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO news_keyword (news_id, keyword_id) VALUES (?, ?)", (news_id, keyword_id))
+                    conn.commit()
+
+        # 新增 category 並與 news_category 關聯
+        if 'category' in data:
+            for category in data['category']:
+                # 檢查 category 是否已存在
+                cursor.execute("SELECT id FROM category WHERE name = ?", (category,))
+                category_record = cursor.fetchone()
+                if not category_record:
+                    cursor.execute("INSERT INTO category (name) VALUES (?)", (category,))
+                    conn.commit()
+                    category_id = cursor.lastrowid
+                else:
+                    category_id = category_record['id']
+
+                # 建立 news_category 關聯
+                cursor.execute("SELECT * FROM news_category WHERE news_id = ? AND category_id = ?", (news_id, category_id))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO news_category (news_id, category_id) VALUES (?, ?)", (news_id, category_id))
+                    conn.commit()
+
+        return jsonify({'message': 'News updated successfully'}), 200
+
 @app.route('/get_wait_query_list', methods=['POST'])
 def get_wait_query_list():
+    '''
+    取得待爬清單
+
+    輸入:
+        - JSON 格式物件，包括:
+            - source_website (int): 資料來源編號
+            - count (int): 需要的資料筆數
+
+    輸出:
+        - 成功: 狀態碼 200，回傳待爬清單
+        - 錯誤: 狀態碼 400
+    '''
     data = request.get_json()
-    source_website = int(data.get('source_website'))
-    count = data.get('count')
+
+    try:
+        source_website = int(data.get('source_website'))
+        count = int(data.get('count'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid source_website or count'}), 400
+
+    if source_website not in SOURCE_WEBSITE_ENUM:
+        return jsonify({'error': 'Invalid source_website value'}), 400
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # 查詢待爬清單
         sql_query = """
         SELECT id, news_url
         FROM news
@@ -275,18 +344,19 @@ def get_wait_query_list():
         LIMIT ?;
         """
         cursor.execute(sql_query, (source_website, count))
-
         news_obj = cursor.fetchall()
-        news_list = [news[0] for news in news_obj]  # 使用索引訪問元組中的 ID
 
-        if news_list:  # 檢查是否有結果需要更新
-            placeholders = ", ".join(["?" for _ in news_list])
-            sql = f'UPDATE news SET query_state = 1 WHERE id IN ({placeholders});'
-            cursor.execute(sql, news_list)
+        # 更新 query_state 為 1
+        if news_obj:
+            news_ids = [news['id'] for news in news_obj]
+            placeholders = ", ".join(["?" for _ in news_ids])
+            update_query = f"UPDATE news SET query_state = 1 WHERE id IN ({placeholders});"
+            cursor.execute(update_query, news_ids)
             conn.commit()
 
-        return jsonify([{"id": news[0], "news_url": news[1]} for news in news_obj])
-
+        # 返回待爬清單
+        news_list = [{"id": news["id"], "news_url": news["news_url"]} for news in news_obj]
+        return jsonify(news_list), 200
 
 # 查看新聞
 @app.route('/news', methods=['GET'])
@@ -296,8 +366,6 @@ def get_news():
         cursor.execute('SELECT * FROM news')
         news_list = cursor.fetchall()
         return jsonify([dict(news) for news in news_list])
-
-
 
 if __name__ == '__main__':
     # init_db()
