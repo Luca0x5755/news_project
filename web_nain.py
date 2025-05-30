@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import sqlite3
 import traceback
 
@@ -505,6 +505,10 @@ def add_ai_news():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/')
+def index():
+    return render_template('news.html')
+
 if __name__ == '__main__':
     # init_db()
-    app.run()# debug=True
+    app.run(debug=True, host='127.0.0.1', port=7000)
