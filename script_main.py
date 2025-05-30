@@ -17,8 +17,9 @@ def get_ttv_news_list():
     }
 
     category_list = ['政治', '國際', '社會', '娛樂', '生活', '氣象', '地方', '健康', '體育', '財經']
-    for i in range(10, 20):
-        for category in category_list:
+    for category in category_list:
+        # 1~20 ok
+        for i in range(1, 20):
             req_news = []
             # 政治, 國際, 社會
             res = requests.get(f'https://news.ttv.com.tw/category/{category}/{i}', headers=my_headers)
@@ -35,9 +36,17 @@ def get_ttv_news_list():
 
                 req_news.append({'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': 1})
             res = requests.post('http://127.0.0.1:5000/news', json=req_news)
-            print(req_news)
-            print(json.loads(res.text))
+            # print(req_news)
+
+            # 確保清單不會一直重複查詢
+            res_objs = json.loads(res.text)
+            success_count = len(res_objs['success'])
+            errors_count = len(res_objs['errors'])
+            print(f'上傳成功: {success_count}, 上傳失敗: {errors_count}')
             time.sleep(random.randint(1,3))
+            if success_count == 0:
+                print(f'{category}類別已查詢完成')
+                break
 
 
 def get_ttv_news():
@@ -94,7 +103,7 @@ def get_ttv_news():
     return 1
 
 if __name__ == '__main__':
-    # get_ttv_news_list()
+    get_ttv_news_list()
     while True:
         is_wait_qurey = get_ttv_news()
         if is_wait_qurey == 0:
