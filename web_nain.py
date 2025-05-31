@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import sqlite3
 import traceback
+from configparser import ConfigParser
 
 app = Flask(__name__)
 DATABASE = 'news.db'
@@ -509,6 +510,15 @@ def add_ai_news():
 def index():
     return render_template('news.html')
 
+def main():
+    config = ConfigParser()
+    config.read('config.ini')
+
+    host = config['WEB_SERVER']['host']
+    port = int(config['WEB_SERVER']['port'])
+
+    app.run(debug=True, host=host, port=port)
+
 if __name__ == '__main__':
     # init_db()
-    app.run(debug=True, host='127.0.0.1', port=7000)
+    main()

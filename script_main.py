@@ -5,6 +5,11 @@ import json
 import re
 from datetime import datetime
 import random
+from configparser import ConfigParser
+
+config = ConfigParser()
+config.read('config.ini')
+WEB_API_ADDRESS = f"{config['WEB_SERVER']['host']}:{config['WEB_SERVER']['port']}"
 
 def format_datetime(news_time):
     dt_object = datetime.strptime(news_time, "%Y.%m.%d %H:%M")
@@ -35,7 +40,7 @@ def get_ttv_news_list():
                 # print(f'連結: {link}')
 
                 req_news.append({'news_time': news_time, 'news_title': news_title, 'news_url': link, 'source_website': 1})
-            res = requests.post('http://127.0.0.1:5000/news', json=req_news)
+            res = requests.post(f'http://{WEB_API_ADDRESS}/news', json=req_news)
             # print(req_news)
 
             # 確保清單不會一直重複查詢
@@ -47,7 +52,6 @@ def get_ttv_news_list():
             if success_count == 0:
                 print(f'{category}類別已查詢完成')
                 break
-
 
 def get_ttv_news():
     # 取得待爬清單
@@ -96,11 +100,13 @@ def get_ttv_news():
         author = author[1] if author else None
 
         json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'query_state': 2}
-        response = requests.put(f'http://127.0.0.1:5000/news/{query_data['id']}', json=json_data)
+        response = requests.put(f'http://{WEB_API_ADDRESS}/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
 
         time.sleep(random.randint(2,7))
     return 1
+
+# def main():
 
 if __name__ == '__main__':
     get_ttv_news_list()
