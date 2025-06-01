@@ -8,6 +8,7 @@ DATABASE = 'news.db'
 
 SOURCE_WEBSITE_ENUM = {
     1: "台視",
+    2: "三立"
 }
 
 SENTIMENT_ANALYSIS_ENUM = {
@@ -313,54 +314,103 @@ def add_news():
     """
     data_list = request.get_json()
     if not isinstance(data_list, list):
-        return jsonify({'error': 'Input data should be a list of news objects'}), 400
+        return jsonify({'error': 'Input should be a list of news objects'}), 400
 
     required_fields = ['news_time', 'news_title', 'news_url', 'source_website']
     results = {'success': [], 'errors': []}
-    valid_data = []
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # 批次預檢
-        for data in data_list:
-            missing_field = validate_required_fields(data, required_fields)
-            if missing_field:
-                results['errors'].append({'data': data, 'error': f'Missing required field: {missing_field}'})
-                continue
-
-            source_website = int(data.get('source_website', 0))
-            if source_website not in SOURCE_WEBSITE_ENUM:
-                results['errors'].append({'data': data, 'error': 'Invalid source_website value'})
-                continue
-
-            valid_data.append(data)
-
-        # 批次檢查是否存在
-        existing_keys = check_existing_news_batch(cursor, valid_data)
         insert_data = []
+        for data in data_list:
+            # 檢查必要欄位
+            for field in required_fields:
+                if not data.get(field):
+                    results['errors'].append({'data': data, 'error': f'Missing field: {field}'})
+                    break
+            else:
+                # 檢查網站來源是否合法
+                try:
+                    source_website = int(data['source_website'])
+                    if source_website not in SOURCE_WEBSITE_ENUM:
+                        raise ValueError()
+                except Exception:
+                    results['errors'].append({'data': data, 'error': 'Invalid source_website'})
+                    continue
 
-        for data in valid_data:
+                insert_data.append(data)
+
+        if not insert_data:
+            return jsonify(results), 400
+
+        # 檢查是否有重複的資料
+        existing_keys = check_existing_news_batch(cursor, insert_data)
+
+        final_data = []
+        for data in insert_data:
             key = (data['news_time'], data['news_url'])
             if key in existing_keys:
-                results['errors'].append({'data': data, 'error': 'News with the same time and URL already exists'})
+                results['errors'].append({'data': data, 'error': 'Duplicate news (same time and URL)'})
                 continue
-            insert_data.append(data)
+            final_data.append(data)
 
-        if insert_data:
+        # 寫入資料庫
+        for data in final_data:
             try:
-                insert_sql, column_names = construct_insert_query('news', insert_data[0])
-                value_tuples = [tuple(data[col] for col in column_names) for data in insert_data]
-                cursor.executemany(insert_sql, value_tuples)
-                conn.commit()
+                # author 處理
+                author_id = None
+                if 'author' in data:
+                    if data['author']:
+                        author_id = get_or_create(cursor, 'author', data['author'])
+                        data['author_id'] = author_id
 
-                # 回傳 ID 無法用 lastrowid，需用 rowid 查詢
-                last_ids = range(cursor.lastrowid - len(insert_data) + 1, cursor.lastrowid + 1)
-                for data, row_id in zip(insert_data, last_ids):
-                    results['success'].append({'data': data, 'id': row_id})
+                # category 處理（單筆字串）
+                category_id = None
+                if 'category' in data and data['category']:
+                    cursor.execute("SELECT id FROM category WHERE name = ?", (data['category'],))
+                    category = cursor.fetchone()
+                    if not category:
+                        cursor.execute("INSERT INTO category (name) VALUES (?)", (data['category'],))
+                        category_id = cursor.lastrowid
+                    else:
+                        category_id = category['id']
+
+                # 想取出的 keys
+                keys_to_extract = ['news_title', 'news_content', 'image_url', 'query_state', 'news_url', 'source_website', 'news_time', 'author_id']
+                # 建立新的 dict
+                new_dict = {k: data[k] for k in keys_to_extract if k in data}
+
+                # 組合插入欄位與 SQL
+                insert_sql, column_names = construct_insert_query('news', new_dict)
+                values = tuple(data.get(col) for col in column_names)
+
+                cursor.execute(insert_sql, values)
+                news_id = cursor.lastrowid
+
+                # 新增 category 關聯
+                if category_id:
+                    cursor.execute("INSERT INTO news_category (news_id, category_id) VALUES (?, ?)", (news_id, category_id))
+
+                # 新增 keyword 關聯
+                if 'keywords' in data and isinstance(data['keywords'], list):
+                    for keyword in data['keywords']:
+                        cursor.execute("SELECT id FROM keyword WHERE name = ?", (keyword,))
+                        kw = cursor.fetchone()
+                        if not kw:
+                            cursor.execute("INSERT INTO keyword (name) VALUES (?)", (keyword,))
+                            keyword_id = cursor.lastrowid
+                        else:
+                            keyword_id = kw['id']
+                        cursor.execute("INSERT INTO news_keyword (news_id, keyword_id) VALUES (?, ?)", (news_id, keyword_id))
+
+                results['success'].append({'data': data, 'id': news_id})
+                conn.commit()
             except Exception as e:
-                for data in insert_data:
-                    results['errors'].append({'data': data, 'error': str(e)})
+                conn.rollback()
+                results['errors'].append({'data': data, 'error': str(e)})
+                traceback.print_exc()
+
     return jsonify(results), 201
 
 @app.route('/news/<int:news_id>', methods=['PUT'])

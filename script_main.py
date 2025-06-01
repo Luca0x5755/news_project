@@ -55,7 +55,7 @@ def get_ttv_news_list():
 
 def get_ttv_news():
     # 取得待爬清單
-    res = requests.post('http://127.0.0.1:5000/wait_query_list', json={'source_website': 1, 'count': 10})
+    res = requests.post(f'http://{WEB_API_ADDRESS}/wait_query_list', json={'source_website': 1, 'count': 10})
     query_list = json.loads(res.text)
 
     # 取新聞內容
@@ -106,11 +106,74 @@ def get_ttv_news():
         time.sleep(random.randint(2,7))
     return 1
 
+def get_setn_news():
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+    }
+    for i in range(1664566, 1664550, -1):
+        link = f'https://www.setn.com//News.aspx?NewsID={i}&utm_campaign=viewallnews'
+        response = requests.get(link, headers=headers)
+        soup = BeautifulSoup(response.text, 'lxml')
+
+        # page_date = soup.select('time.page_date')[0].text
+        # Content1 = soup.select('div#Content1 > p')
+
+        ld_json_scripts = soup.find('script', type='application/ld+json')
+        data = json.loads(ld_json_scripts.string)
+
+        soup_news_title = soup.select('h1.news-title-3')
+        if soup_news_title == []:
+            continue
+        news_title = soup_news_title[0].text
+
+        # 內文
+        content = data['description']
+
+        # 抓取編輯
+        # 社會中心／黃韻璇報導
+        # 政治中心／綜合報導
+        # 生活中心／王文承報導
+        # 記者林意筑／台中報導
+        # 記者廖宜德、張裕坤、張展誌／雲林報導
+        # text = '生活中心／王文承報導'
+        # author = re.search(r'記者([\u4e00-\u9fff]+?)[、／]|中心／([\u4e00-\u9fff]+?)[報導、]', text)
+        # author = author[1] if author[1] else author[2]
+        author = None
+        for k, v in data['author'].items():
+            if k == 'name':
+                author = v
+
+
+        # 抓取圖片
+        # imgs = soup.select("div#Content1 img")
+        # src = None
+        # if len(imgs) > 0:
+        #     src = imgs[0]['src']
+
+        src = None
+        for k, v in data['image'].items():
+            if k == 'url':
+                src = v
+
+        # 日期時間
+        dt = datetime.fromisoformat(data['datePublished'])
+        news_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        keywords = data['keywords']
+        category = data['articleSection']
+
+        json_data = [{'news_title': news_title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'query_state': 2, 'news_url': link, 'source_website': 2, 'news_time': news_time}]
+        res = requests.post(f'http://{WEB_API_ADDRESS}/news', json=json_data)
+        print(json.loads(res.text))
+        time.sleep(random.randint(2,4))
+
 # def main():
 
 if __name__ == '__main__':
-    get_ttv_news_list()
-    while True:
-        is_wait_qurey = get_ttv_news()
-        if is_wait_qurey == 0:
-            break
+    # get_ttv_news_list()
+    # while True:
+    #     is_wait_qurey = get_ttv_news()
+    #     if is_wait_qurey == 0:
+    #         break
+
+    get_setn_news()
