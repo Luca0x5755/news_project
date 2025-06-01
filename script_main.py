@@ -107,11 +107,11 @@ def get_ttv_news():
     return 1
 
 def get_setn_news():
-    # max 1664942, min 1661463
+    # max 1664942, min 1660393
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     }
-    for i in range(1661463, 1660000, -1):
+    for i in range(1660393, 1660000, -1):
         link = f'https://www.setn.com//News.aspx?NewsID={i}&utm_campaign=viewallnews'
         response = requests.get(link, headers=headers)
         soup = BeautifulSoup(response.text, 'lxml')
@@ -171,10 +171,10 @@ def get_setn_news():
 # def main():
 
 if __name__ == '__main__':
-    get_ttv_news_list()
-    while True:
-        is_wait_qurey = get_ttv_news()
-        if is_wait_qurey == 0:
-            break
+    # get_ttv_news_list()
+    # while True:
+    #     is_wait_qurey = get_ttv_news()
+    #     if is_wait_qurey == 0:
+    #         break
 
-    # get_setn_news()
+    get_setn_news()
