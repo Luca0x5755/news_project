@@ -42,7 +42,7 @@ def init_db():
         cursor.execute('''
         CREATE TABLE news (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            news_time DATETIME NOT NULL,          -- 新聞時間
+            news_time DATETIME         ,          -- 新聞時間
             news_title VARCHAR(50) NOT NULL,      -- 新聞標題
             news_content TEXT,                    -- 新聞內容
             image_url TEXT,                       -- 圖片連結
