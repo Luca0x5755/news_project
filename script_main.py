@@ -11,6 +11,23 @@ config = ConfigParser()
 config.read('config.ini')
 WEB_API_ADDRESS = f"{config['WEB_SERVER']['host']}:{config['WEB_SERVER']['port']}"
 
+headers = {
+    'accept': '*/*',
+    'accept-language': 'zh-TW,zh;q=0.9,en;q=0.8',
+    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    'origin': 'https://news.ebc.net.tw',
+    'priority': 'u=1, i',
+    'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+    'x-requested-with': 'XMLHttpRequest',
+    }
+
+
 def format_datetime(news_time):
     dt_object = datetime.strptime(news_time, "%Y.%m.%d %H:%M")
     return dt_object.strftime("%Y-%m-%d %H:%M:%S")
@@ -168,6 +185,96 @@ def get_setn_news():
         print(json.loads(res.text))
         time.sleep(random.randint(2,4))
 
+def get_ebc_news_list():
+    # 取新聞清單
+    category_list = ['politics', 'living', 'society', 'world', 'sport', 'business', 'health']
+    for category in category_list[4:5]:
+        req_news = []
+        for i in range(1, 2):
+
+            data = {
+                'cate_code': category,
+                'exclude': '',
+                'page': i,
+            }
+
+            response = requests.post(f'https://news.ebc.net.tw/category/load', headers=headers, data=data)
+
+            soup = BeautifulSoup(response.text, 'lxml')
+            news_list = soup.select('a.item.col3')
+
+            for news in news_list:
+                news_title = news['title']
+
+                link = f'https://news.ebc.net.tw/{news['href']}'
+
+                req_news.append({'news_title': news_title, 'news_url': link, 'source_website': 3})
+            res = requests.post(f'http://{WEB_API_ADDRESS}/news', json=req_news)
+            # print(req_news)
+
+            # 確保清單不會一直重複查詢
+            res_objs = json.loads(res.text)
+            success_count = len(res_objs['success'])
+            errors_count = len(res_objs['errors'])
+            print(res_objs['errors'])
+            print(f'上傳成功: {success_count}, 上傳失敗: {errors_count}')
+            time.sleep(random.randint(1,3))
+            if success_count == 0:
+                print(f'{category}類別已查詢完成')
+                break
+
+def get_ebc_news():
+    res = requests.post(f'http://{WEB_API_ADDRESS}/wait_query_list', json={'source_website': 3, 'count': 1})
+    query_list = json.loads(res.text)
+
+
+    # 取新聞內容
+
+    if len(query_list) == 0:
+        return 0
+
+    for query_data in query_list:
+        res = requests.get(query_data['news_url'], headers=headers)
+        soup = BeautifulSoup(res.text, 'lxml')
+
+        ld_json_scripts = soup.find('script', type='application/ld+json')
+        data = json.loads(ld_json_scripts.string)[0]
+
+        # 標題
+        title = data['headline']
+
+        # 類別
+        category = data['articleSection']
+
+        # 標籤
+        keywords = data['keywords'].split(',') if 'keywords' in data else None
+
+        # 抓取圖片
+        src = data['image']
+
+        # 內文
+        p = soup.select("div.article_content > p")
+        content = '\n'.join([x.text for x in p])
+
+        # 抓取編輯
+        # 抓取編輯
+        # 實習編輯 黃X亮
+        author = re.search(r'編輯 ([\u4e00-\u9fff]+)', data['author']['name'])
+        author = author[1] if author else data['author']['name']
+
+        # 日期時間
+        dt = datetime.fromisoformat(data['dateCreated'])
+        news_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'news_time': news_time, 'query_state': 2}
+
+        response = requests.put(f'http://{WEB_API_ADDRESS}/news/{query_data['id']}', json=json_data)
+        print(json_data)
+        print('id:', query_data['id'], response.reason)
+
+        time.sleep(random.randint(2,7))
+    return 1
+
 # def main():
 
 if __name__ == '__main__':
@@ -177,4 +284,10 @@ if __name__ == '__main__':
     #     if is_wait_qurey == 0:
     #         break
 
-    get_setn_news()
+    # get_setn_news()
+
+    get_ebc_news_list()
+    while True:
+        is_wait_qurey = get_ebc_news()
+        if is_wait_qurey == 0:
+            break
