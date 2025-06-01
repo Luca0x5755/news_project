@@ -23,8 +23,8 @@ def get_ttv_news_list():
 
     category_list = ['政治', '國際', '社會', '娛樂', '生活', '氣象', '地方', '健康', '體育', '財經']
     for category in category_list:
-        # 1~20 ok
-        for i in range(1, 20):
+        # 1~40 ok
+        for i in range(40, 60):
             req_news = []
             # 政治, 國際, 社會
             res = requests.get(f'https://news.ttv.com.tw/category/{category}/{i}', headers=my_headers)
@@ -49,9 +49,9 @@ def get_ttv_news_list():
             errors_count = len(res_objs['errors'])
             print(f'上傳成功: {success_count}, 上傳失敗: {errors_count}')
             time.sleep(random.randint(1,3))
-            if success_count == 0:
-                print(f'{category}類別已查詢完成')
-                break
+            # if success_count == 0:
+            #     print(f'{category}類別已查詢完成')
+            #     break
 
 def get_ttv_news():
     # 取得待爬清單
@@ -107,10 +107,11 @@ def get_ttv_news():
     return 1
 
 def get_setn_news():
+    # max 1664942, min 1661463
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     }
-    for i in range(1664566, 1664550, -1):
+    for i in range(1661463, 1660000, -1):
         link = f'https://www.setn.com//News.aspx?NewsID={i}&utm_campaign=viewallnews'
         response = requests.get(link, headers=headers)
         soup = BeautifulSoup(response.text, 'lxml')
@@ -170,10 +171,10 @@ def get_setn_news():
 # def main():
 
 if __name__ == '__main__':
-    # get_ttv_news_list()
-    # while True:
-    #     is_wait_qurey = get_ttv_news()
-    #     if is_wait_qurey == 0:
-    #         break
+    get_ttv_news_list()
+    while True:
+        is_wait_qurey = get_ttv_news()
+        if is_wait_qurey == 0:
+            break
 
-    get_setn_news()
+    # get_setn_news()
