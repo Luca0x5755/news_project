@@ -8,7 +8,8 @@ DATABASE = 'news.db'
 
 SOURCE_WEBSITE_ENUM = {
     1: "台視",
-    2: "三立"
+    2: "三立",
+    3: "東森"
 }
 
 SENTIMENT_ANALYSIS_ENUM = {
@@ -148,14 +149,16 @@ def validate_required_fields(data, required_fields):
 def check_existing_news_batch(cursor, news_items):
     """
     輸入：cursor, news_items (list of dict)
-    輸出：set，存在於資料庫中的 (news_time, news_url) tuple
+    輸出：set，存在於資料庫中的 news_url
     """
-    placeholders = ', '.join(['(?, ?)'] * len(news_items))
-    values = [(item['news_time'], item['news_url']) for item in news_items]
-    flat_values = [v for pair in values for v in pair]
-    sql = f"SELECT news_time, news_url FROM news WHERE (news_time, news_url) IN ({placeholders})"
-    cursor.execute(sql, flat_values)
-    return set((row['news_time'], row['news_url']) for row in cursor.fetchall())
+    urls = [item['news_url'] for item in news_items]
+    if not urls:
+        return set()
+    placeholders = ', '.join(['?'] * len(urls))
+    sql = f"SELECT news_url FROM news WHERE news_url IN ({placeholders})"
+    cursor.execute(sql, urls)
+    return set(row['news_url'] for row in cursor.fetchall())
+
 
 def construct_insert_query(table_name, data_sample):
     """
@@ -316,7 +319,7 @@ def add_news():
     if not isinstance(data_list, list):
         return jsonify({'error': 'Input should be a list of news objects'}), 400
 
-    required_fields = ['news_time', 'news_title', 'news_url', 'source_website']
+    required_fields = ['news_title', 'news_url', 'source_website']
     results = {'success': [], 'errors': []}
 
     with get_db_connection() as conn:
@@ -349,8 +352,7 @@ def add_news():
 
         final_data = []
         for data in insert_data:
-            key = (data['news_time'], data['news_url'])
-            if key in existing_keys:
+            if data['news_url'] in existing_keys:
                 results['errors'].append({'data': data, 'error': 'Duplicate news (same time and URL)'})
                 continue
             final_data.append(data)
