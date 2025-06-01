@@ -1,12 +1,15 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import sqlite3
 import traceback
+from configparser import ConfigParser
 
 app = Flask(__name__)
 DATABASE = 'news.db'
 
 SOURCE_WEBSITE_ENUM = {
     1: "台視",
+    2: "三立",
+    3: "東森"
 }
 
 SENTIMENT_ANALYSIS_ENUM = {
@@ -39,7 +42,7 @@ def init_db():
         cursor.execute('''
         CREATE TABLE news (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一識別碼
-            news_time DATETIME NOT NULL,          -- 新聞時間
+            news_time DATETIME         ,          -- 新聞時間
             news_title VARCHAR(50) NOT NULL,      -- 新聞標題
             news_content TEXT,                    -- 新聞內容
             image_url TEXT,                       -- 圖片連結
@@ -146,14 +149,16 @@ def validate_required_fields(data, required_fields):
 def check_existing_news_batch(cursor, news_items):
     """
     輸入：cursor, news_items (list of dict)
-    輸出：set，存在於資料庫中的 (news_time, news_url) tuple
+    輸出：set，存在於資料庫中的 news_url
     """
-    placeholders = ', '.join(['(?, ?)'] * len(news_items))
-    values = [(item['news_time'], item['news_url']) for item in news_items]
-    flat_values = [v for pair in values for v in pair]
-    sql = f"SELECT news_time, news_url FROM news WHERE (news_time, news_url) IN ({placeholders})"
-    cursor.execute(sql, flat_values)
-    return set((row['news_time'], row['news_url']) for row in cursor.fetchall())
+    urls = [item['news_url'] for item in news_items]
+    if not urls:
+        return set()
+    placeholders = ', '.join(['?'] * len(urls))
+    sql = f"SELECT news_url FROM news WHERE news_url IN ({placeholders})"
+    cursor.execute(sql, urls)
+    return set(row['news_url'] for row in cursor.fetchall())
+
 
 def construct_insert_query(table_name, data_sample):
     """
@@ -312,54 +317,102 @@ def add_news():
     """
     data_list = request.get_json()
     if not isinstance(data_list, list):
-        return jsonify({'error': 'Input data should be a list of news objects'}), 400
+        return jsonify({'error': 'Input should be a list of news objects'}), 400
 
-    required_fields = ['news_time', 'news_title', 'news_url', 'source_website']
+    required_fields = ['news_title', 'news_url', 'source_website']
     results = {'success': [], 'errors': []}
-    valid_data = []
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # 批次預檢
-        for data in data_list:
-            missing_field = validate_required_fields(data, required_fields)
-            if missing_field:
-                results['errors'].append({'data': data, 'error': f'Missing required field: {missing_field}'})
-                continue
-
-            source_website = int(data.get('source_website', 0))
-            if source_website not in SOURCE_WEBSITE_ENUM:
-                results['errors'].append({'data': data, 'error': 'Invalid source_website value'})
-                continue
-
-            valid_data.append(data)
-
-        # 批次檢查是否存在
-        existing_keys = check_existing_news_batch(cursor, valid_data)
         insert_data = []
+        for data in data_list:
+            # 檢查必要欄位
+            for field in required_fields:
+                if not data.get(field):
+                    results['errors'].append({'data': data, 'error': f'Missing field: {field}'})
+                    break
+            else:
+                # 檢查網站來源是否合法
+                try:
+                    source_website = int(data['source_website'])
+                    if source_website not in SOURCE_WEBSITE_ENUM:
+                        raise ValueError()
+                except Exception:
+                    results['errors'].append({'data': data, 'error': 'Invalid source_website'})
+                    continue
 
-        for data in valid_data:
-            key = (data['news_time'], data['news_url'])
-            if key in existing_keys:
-                results['errors'].append({'data': data, 'error': 'News with the same time and URL already exists'})
+                insert_data.append(data)
+
+        if not insert_data:
+            return jsonify(results), 400
+
+        # 檢查是否有重複的資料
+        existing_keys = check_existing_news_batch(cursor, insert_data)
+
+        final_data = []
+        for data in insert_data:
+            if data['news_url'] in existing_keys:
+                results['errors'].append({'data': data, 'error': 'Duplicate news (same time and URL)'})
                 continue
-            insert_data.append(data)
+            final_data.append(data)
 
-        if insert_data:
+        # 寫入資料庫
+        for data in final_data:
             try:
-                insert_sql, column_names = construct_insert_query('news', insert_data[0])
-                value_tuples = [tuple(data[col] for col in column_names) for data in insert_data]
-                cursor.executemany(insert_sql, value_tuples)
-                conn.commit()
+                # author 處理
+                author_id = None
+                if 'author' in data:
+                    if data['author']:
+                        author_id = get_or_create(cursor, 'author', data['author'])
+                        data['author_id'] = author_id
 
-                # 回傳 ID 無法用 lastrowid，需用 rowid 查詢
-                last_ids = range(cursor.lastrowid - len(insert_data) + 1, cursor.lastrowid + 1)
-                for data, row_id in zip(insert_data, last_ids):
-                    results['success'].append({'data': data, 'id': row_id})
+                # category 處理（單筆字串）
+                category_id = None
+                if 'category' in data and data['category']:
+                    cursor.execute("SELECT id FROM category WHERE name = ?", (data['category'],))
+                    category = cursor.fetchone()
+                    if not category:
+                        cursor.execute("INSERT INTO category (name) VALUES (?)", (data['category'],))
+                        category_id = cursor.lastrowid
+                    else:
+                        category_id = category['id']
+
+                # 想取出的 keys
+                keys_to_extract = ['news_title', 'news_content', 'image_url', 'query_state', 'news_url', 'source_website', 'news_time', 'author_id']
+                # 建立新的 dict
+                new_dict = {k: data[k] for k in keys_to_extract if k in data}
+
+                # 組合插入欄位與 SQL
+                insert_sql, column_names = construct_insert_query('news', new_dict)
+                values = tuple(data.get(col) for col in column_names)
+
+                cursor.execute(insert_sql, values)
+                news_id = cursor.lastrowid
+
+                # 新增 category 關聯
+                if category_id:
+                    cursor.execute("INSERT INTO news_category (news_id, category_id) VALUES (?, ?)", (news_id, category_id))
+
+                # 新增 keyword 關聯
+                if 'keywords' in data and isinstance(data['keywords'], list):
+                    for keyword in data['keywords']:
+                        cursor.execute("SELECT id FROM keyword WHERE name = ?", (keyword,))
+                        kw = cursor.fetchone()
+                        if not kw:
+                            cursor.execute("INSERT INTO keyword (name) VALUES (?)", (keyword,))
+                            keyword_id = cursor.lastrowid
+                        else:
+                            keyword_id = kw['id']
+                        cursor.execute("INSERT INTO news_keyword (news_id, keyword_id) VALUES (?, ?)", (news_id, keyword_id))
+
+                results['success'].append({'data': data, 'id': news_id})
+                conn.commit()
             except Exception as e:
-                for data in insert_data:
-                    results['errors'].append({'data': data, 'error': str(e)})
+                conn.rollback()
+                results['errors'].append({'data': data, 'error': str(e)})
+                traceback.print_exc()
+
     return jsonify(results), 201
 
 @app.route('/news/<int:news_id>', methods=['PUT'])
@@ -505,6 +558,19 @@ def add_ai_news():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/')
+def index():
+    return render_template('news.html')
+
+def main():
+    config = ConfigParser()
+    config.read('config.ini')
+
+    host = config['WEB_SERVER']['host']
+    port = int(config['WEB_SERVER']['port'])
+
+    app.run(debug=True, host=host, port=port)
+
 if __name__ == '__main__':
     # init_db()
-    app.run()# debug=True
+    main()
