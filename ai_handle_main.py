@@ -3,6 +3,11 @@ import re
 import json
 import configparser
 import time
+from configparser import ConfigParser
+
+config = ConfigParser()
+config.read('config.ini')
+WEB_API_ADDRESS = f"{config['WEB_SERVER']['host']}:{config['WEB_SERVER']['port']}"
 
 def get_token_from_config(config_path="config.ini"):
     """從 ini 檔案中讀取 token"""
@@ -25,7 +30,7 @@ def fetch_models(token):
 
 def fetch_news_list(count, model):
     """取得待處理的新聞清單"""
-    url = 'http://127.0.0.1:5000/wait_ai_handle_list'
+    url = f'http://{WEB_API_ADDRESS}/wait_ai_handle_list'
     try:
         response = requests.post(url, json={'count': count, 'model': model})
         return json.loads(response.text)
@@ -85,10 +90,9 @@ class ChatSession:
 
 def process_and_add_ai_news(token, news_list, model):
     """處理新聞並新增至 AI 分析結果表"""
-    api_url = "http://127.0.0.1:5000/add_ai_news"
+    api_url = f"http://{WEB_API_ADDRESS}/add_ai_news"
 
     session = ChatSession(token=token, model=model)
-
 
     for news in news_list:
         jsondata = session.chat(news['news_content'])
