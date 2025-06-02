@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import sqlite3
 import traceback
 from configparser import ConfigParser
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DATABASE = 'news.db'
@@ -521,9 +522,9 @@ def add_ai_news():
         categories = data.get('category', [])
         keywords = data.get('keyword', [])
         sentiment_val = data.get('sentiment_analysis')
+        sentiment_val = '中立' if sentiment_val == '中性' else sentiment_val
         news_id = data.get('news_id')
         model = reversed_AI_MODEL_ENUM[data.get('model')]
-
 
         sentiment_key = get_sentiment_analysis_key(sentiment_val)
         if not (title and categories and keywords and sentiment_key is not None and isinstance(news_id, int)):
@@ -557,6 +558,179 @@ def add_ai_news():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+def query_db(query, args=(), one=False):
+    """
+    Execute a query on the SQLite database.
+    """
+    with get_db_connection() as conn:
+        cur = conn.execute(query, args)
+        rv = cur.fetchall()
+        return (rv[0] if rv else None) if one else rv
+
+
+@app.route('/api/ai_news', methods=['POST'])
+def ai_news_list():
+    """
+    API for fetching a list of news items.
+
+    Input:
+    - ai_model (required): Integer, AI model ID.
+    - source_website (optional): Integer, source website ID.
+    - offset (optional): Integer, the starting position for the query (default is 0).
+
+    Output:
+    JSON array of news items, each containing:
+    - time: String, formatted time ("past hours" or "YYYY-MM-DD").
+    - ai_title: String, AI-generated title.
+    - image_url: String, image URL.
+    - source_website: String, source website name.
+    Sorted by time in descending order.
+    """
+    data = request.json
+    ai_model = data.get('ai_model', None)
+    source_website = data.get('source_website', None)
+    offset = data.get('offset', 0)
+
+    # Validate required parameters
+    if not ai_model or ai_model not in AI_MODEL_ENUM:
+        return jsonify({"error": "Invalid or missing 'ai_model' parameter."}), 400
+
+    # Validate optional parameters
+    if not isinstance(offset, int) or offset < 0:
+        return jsonify({"error": "'offset' must be a non-negative integer."}), 400
+
+    # Build SQL query with optional filtering
+    query = '''
+    SELECT
+        news.id AS news_id,
+        news.news_time AS time,
+        ai_news.ai_title AS ai_title,
+        news.image_url AS image_url,
+        news.source_website AS source_website,
+        news.news_url AS news_url
+    FROM ai_news
+    JOIN news ON ai_news.news_id = news.id
+    WHERE ai_news.ai_model = ?
+    '''
+    params = [ai_model]
+
+    if source_website:
+        query += " AND news.source_website = ?"
+        params.append(source_website)
+
+    query += " ORDER BY news.news_time DESC LIMIT 10 OFFSET ?"
+    params.append(offset)
+
+    # Execute query
+    rows = query_db(query, params)
+
+    # Format output
+    now = datetime.now()
+    formatted_results = []
+    for row in rows:
+        time = datetime.strptime(row['time'], "%Y-%m-%d %H:%M:%S")
+        if now - time < timedelta(hours=24):
+            formatted_time = f"{int((now - time).total_seconds() // 3600)} hours ago"
+        else:
+            formatted_time = time.strftime("%Y-%m-%d")
+
+        formatted_results.append({
+            "time": formatted_time,
+            "ai_title": row['ai_title'],
+            "image_url": row['image_url'],
+            "source_website": SOURCE_WEBSITE_ENUM.get(row['source_website'], "Unknown"),
+            "news_id": row['news_id'],
+            "news_url": row['news_url']
+        })
+
+    return jsonify(formatted_results)
+
+
+@app.route('/api/ai_news/<int:news_id>', methods=['GET'])
+def ai_news_detail(news_id):
+    '''
+    使用get寫一個新聞API，符合以下需求，並在每段程式碼標註註解，函式內開頭使用多行字串寫這個API的輸入輸出
+
+    輸入
+    news id
+
+    輸出
+    json格式：AI標題、AI 模型(名稱)、AI 語意分析(名稱)、標題、時間(年月日時分秒)、新聞內容、圖片、來源新聞台、來源連結
+    '''
+    """
+    API for fetching detailed news information.
+
+    Input:
+    - news_id (required): Integer, ID of the news item.
+
+    Output:
+    JSON object containing:
+    - ai_details: List of objects, each containing:
+        - ai_title: String, AI-generated title.
+        - ai_model: String, name of the AI model used.
+        - ai_sentiment_analysis: String, sentiment analysis result.
+    - news_title: String, original news title.
+    - news_time: String, formatted news time (YYYY-MM-DD HH:MM:SS).
+    - news_content: String, content of the news.
+    - image_url: String, URL of the news image.
+    - source_website: String, name of the source website.
+    - news_url: String, URL of the original news.
+    """
+    # SQL query to fetch detailed news information
+    news_query = '''
+    SELECT
+        news.news_title AS news_title,
+        news.news_time AS news_time,
+        news.news_content AS news_content,
+        news.image_url AS image_url,
+        news.source_website AS source_website,
+        news.news_url AS news_url
+    FROM news
+    WHERE news.id = ?
+    '''
+
+    ai_query = '''
+    SELECT
+        ai_news.ai_title AS ai_title,
+        ai_news.ai_model AS ai_model,
+        ai_news.ai_sentiment_analysis AS ai_sentiment_analysis
+    FROM ai_news
+    WHERE ai_news.news_id = ?
+    '''
+
+    # Fetch data from database
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        news_result = cursor.execute(news_query, (news_id,)).fetchone()
+        ai_results = cursor.execute(ai_query, (news_id,)).fetchall()
+
+    if not news_result:
+        return jsonify({"error": "News item not found."}), 404
+
+    # Format AI details
+    ai_details = [
+        {
+            "ai_title": ai["ai_title"],
+            "ai_model": AI_MODEL_ENUM.get(ai["ai_model"], "Unknown"),
+            "ai_sentiment_analysis": SENTIMENT_ANALYSIS_ENUM.get(ai["ai_sentiment_analysis"], "Unknown")
+        }
+        for ai in ai_results
+    ]
+
+    # Format the output
+    response = {
+        "ai_details": ai_details,
+        "news_title": news_result["news_title"],
+        "news_time": news_result["news_time"],
+        "news_content": news_result["news_content"],
+        "image_url": news_result["image_url"],
+        "source_website": SOURCE_WEBSITE_ENUM.get(news_result["source_website"], "Unknown"),
+        "news_url": news_result["news_url"]
+    }
+
+    return jsonify(response)
 
 @app.route('/')
 def index():
