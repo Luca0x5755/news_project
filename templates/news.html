@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
     <title>新聞卡片網頁</title>
     <style>
       body {
@@ -55,10 +58,116 @@
         font-size: 14px;
         color: #bbbbbb;
       }
+
+      .modal-content {
+          background-color: #212529; /* 深色背景 */
+          color: #f8f9fa; /* 淺色文字 */
+      }
+      .modal-header, .modal-footer {
+          border-color: #343a40; /* 深色邊框 */
+      }
+      .btn-primary {
+          background-color: #0d6efd; /* 藍色按鈕 */
+          border-color: #0d6efd;
+      }
+      .btn-secondary {
+          background-color: #6c757d; /* 灰色按鈕 */
+          border-color: #6c757d;
+      }
+      .btn-close {
+          filter: invert(1); /* 反轉關閉按鈕顏色 */
+      }
+
+        .accordion-item {
+            background-color: #212529; /* 深色背景 */
+            border: 1px solid #343a40; /* 深色邊框 */
+        }
+        .accordion-header {
+            background-color: #343a40; /* 深色標題背景 */
+        }
+        .accordion-button {
+            background-color: #495057; /* 深色按鈕背景 */
+            color: #f8f9fa; /* 淺色文字 */
+        }
+        .accordion-button:not(.collapsed) {
+            background-color: #6c757d; /* 展開時的按鈕背景 */
+            color: #ffffff; /* 展開時的文字顏色 */
+        }
+        .accordion-button:focus {
+            box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25); /* 聚焦效果 */
+        }
+        .accordion-body {
+            background-color: #212529; /* 深色內容背景 */
+            color: #adb5bd; /* 淺灰文字 */
+        }
+
+
     </style>
   </head>
 
-  <body>
+<body class="bg-dark text-light">
+    <!-- 模態視窗 -->
+    <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">神似羅志祥的林姓直播主涉詐騙，遭刑事局起訴，財損逾54億。</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div>
+                    <img src="https://cdn.ttv.com.tw/manasystem/FileData/News/d4f7928e-2a38-4a07-bb05-9a4fa985fda1.jpg" style="width: 450px;" onclick="fetchNewsDetails(221)" alt="News Image">
+                    <br>
+                    <br>
+                    <p>曾參加過歌唱比賽、長相神似歌手羅志祥的林姓直播主，竟涉及詐騙案，警方查獲他指揮小弟，鎖定曾遭到靈骨塔詐騙的被害人，佯稱有買家高價收購「生基位」等殯葬商品為誘餌進行詐騙，總金額破5400萬，拿去買瑪莎拉蒂跑車，如今被刑事局拘提到案，遭起訴收押。</p>
+                    <p>大批刑警衝進大樓住宅時，嫌犯被嚇到來不及反應，他的愛犬也倉皇逃出房間，他是詐騙集團主謀，在搞詐騙前是直播主，還曾參加歌唱比賽，因為長相神似亞洲舞王羅志祥，被網友發掘卻被翻出過去，曾是竹聯幫幫眾，這回竟走歪路轉行做詐騙。</p>
+                    <p>警方調查，林姓主嫌指揮在酒店認識的朋友擔任業務，騙取曾受生基塔位詐騙的高齡女性，誆稱有買家願意高價收購「生基塔位」估價金額從3千萬喊到1億，開著百萬休旅車載被害人到台北市區日租辦公室簽約，製造背後真的有公司經營。</p>
+                    <p>結果簽約後業務改口帳戶有問題，錢匯不進去必須先拿一筆錢做金流，以你出300萬我出500萬的說法，來說服被害人交付大筆現金，得手後就搞消失，還有人房子遭到抵押被迫搬遷連家都沒了。</p>
+                    <p>電信偵查大隊第一隊隊長韋詩亭表示，「總計財損逾新台幣5469萬元，林嫌等人訊問後以加重詐欺罪嫌等，移送台灣台北地方檢察署續辦」。</p>
+                    <p>檢警去年至今，在雙北地區逮捕林姓主嫌等15人，大量贓款、瑪莎拉蒂跑車及手機證物全被查扣，詐騙集團用不法獲利，享受榮華富貴如今成為幻影。</p>
+                    <p>台北／李亭熙、張信智 責任編輯／蔡尚晉</p>
+
+                    <p>2025-05-28 20:53:00</p>
+                  </div>
+
+                  <div class="accordion" id="accordionExample">
+                    <div class="accordion-item">
+                      <h2 class="accordion-header">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                          模型：gemma3:12b-it-qat
+                        </button>
+                      </h2>
+                      <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+                        <div class="accordion-body">
+                          <p>生成標題：直播主涉嫌詐騙高齡婦女破5400萬，羅志祥神似外貌曾是幫眾。</p>
+                          <p>語意分析：負面</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="accordion" id="accordionExample">
+                    <div class="accordion-item">
+                      <h2 class="accordion-header">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                          模型：gemma3:4b-it-qat
+                        </button>
+                      </h2>
+                      <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+                        <div class="accordion-body">
+                          <p>生成標題：神似羅志祥的林姓直播主涉詐騙，遭刑事局起訴，財損逾54億。</p>
+                          <p>語意分析：負面</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <div class="container" id="news-container">
       <!-- API 資料卡片將注入到這裡 -->
     </div>
@@ -102,10 +211,10 @@
 
             // 動態生成卡片內容，若圖片連結為 null 則不顯示圖片標籤
             card.innerHTML = `
-              ${news.image_url ? `<img src="${news.image_url}" alt="News Image" />` : ""}
+              ${news.image_url ? `<img src="${news.image_url}" onclick="fetchNewsDetails(${news.news_id})" alt="News Image" />` : ""}
               <div class="card-content">
-                <div class="card-title">${news.ai_title}</div>
-                <div class="card-meta">${news.time} | 來源：${news.source_website}</div>
+                <div class="card-title" onclick="fetchNewsDetails(${news.news_id})">${news.ai_title}</div>
+                <div class="card-meta">${news.time} | 來源：<a href="${news.news_url}" target="_blank" style="color:rgb(0, 128, 255);">${news.source_website}</a></div>
               </div>
             `;
             container.appendChild(card);
@@ -131,6 +240,13 @@
       document.addEventListener("DOMContentLoaded", () => {
         fetchNews();
       });
+
+        function fetchNewsDetails(news_id) {
+            // 使用 Bootstrap 提供的模態控制 API
+            var exampleModal = new bootstrap.Modal(document.getElementById('exampleModal'));
+            exampleModal.show(); // 顯示模態視窗
+        }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
