@@ -608,7 +608,8 @@ def ai_news_list():
         news.news_time AS time,
         ai_news.ai_title AS ai_title,
         news.image_url AS image_url,
-        news.source_website AS source_website
+        news.source_website AS source_website,
+        news.news_url AS news_url
     FROM ai_news
     JOIN news ON ai_news.news_id = news.id
     WHERE ai_news.ai_model = ?
@@ -640,7 +641,8 @@ def ai_news_list():
             "ai_title": row['ai_title'],
             "image_url": row['image_url'],
             "source_website": SOURCE_WEBSITE_ENUM.get(row['source_website'], "Unknown"),
-            "news_id": row['news_id']
+            "news_id": row['news_id'],
+            "news_url": row['news_url']
         })
 
     return jsonify(formatted_results)
