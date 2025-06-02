@@ -58,30 +58,77 @@
     </style>
   </head>
 
-
   <body>
-    <div class="container">
-      <div class="card">
-        <img src="https://via.placeholder.com/380x200" alt="News Image" />
-        <div class="card-content">
-          <div class="card-title">
-            限時享一年免費騎車！入手 MUJI 聯名家庭車櫃現在
-          </div>
-          <div class="card-meta">發布時間：3 小時前 | 來源：Gogoro</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <img src="https://via.placeholder.com/380x200" alt="News Image" />
-        <div class="card-content">
-          <div class="card-title">
-            台灣家庭負債近全年 GDP，中央銀行整理一件事
-          </div>
-          <div class="card-meta">發布時間：6 小時前 | 來源：風傳媒</div>
-        </div>
-      </div>
-
-      <!-- 可繼續增加更多卡片 -->
+    <div class="container" id="news-container">
+      <!-- API 資料卡片將注入到這裡 -->
     </div>
+
+    <script>
+      let offset = 0; // 起始位置
+      const limit = 10; // 每次加載的數量
+      const isLoading = { value: false }; // 是否正在加載
+      let hasMoreData = true; // 是否有更多資料
+
+      async function fetchNews() {
+        if (isLoading.value || !hasMoreData) return;
+
+        isLoading.value = true;
+
+        try {
+          const response = await fetch("http://127.0.0.1:7000/api/ai_news", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ai_model: 1, source_website: 1, offset }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+
+          const data = await response.json();
+
+          if (data.length === 0) {
+            hasMoreData = false; // 沒有更多資料
+            return;
+          }
+
+          const container = document.getElementById("news-container");
+
+          data.forEach((news) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = `
+              <img src="${news.image_url}" alt="News Image" />
+              <div class="card-content">
+                <div class="card-title">${news.ai_title}</div>
+                <div class="card-meta">${news.time} | 來源：${news.source_website}</div>
+              </div>
+            `;
+            container.appendChild(card);
+          });
+
+          // 更新 offset
+          offset += limit;
+        } catch (error) {
+          console.error("Error fetching news:", error);
+        } finally {
+          isLoading.value = false;
+        }
+      }
+
+      // 滾動事件監聽
+      window.addEventListener("scroll", () => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 50) {
+          fetchNews();
+        }
+      });
+
+      // 初始化加載
+      document.addEventListener("DOMContentLoaded", () => {
+        fetchNews();
+      });
+    </script>
   </body>
 </html>

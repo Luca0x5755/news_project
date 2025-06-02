@@ -572,19 +572,13 @@ def query_db(query, args=(), one=False):
 
 @app.route('/api/ai_news', methods=['POST'])
 def ai_news_list():
-    '''
-    提示詞: 使用post寫一個新聞清單API，符合以下需求，並在每段程式碼標註註解，函式內開頭使用多行字串寫這個API的輸入輸出
-    輸入
-    AI 模型(必填，輸入代號)、來源網站(非必填，輸入代號)
-    輸出
-    json格式：時間(>=24小時，顯示過去幾個小時：<24小時，顯示年月日)、AI標題、圖片、來源新聞台，時間排序
-    '''
     """
     API for fetching a list of news items.
 
     Input:
     - ai_model (required): Integer, AI model ID.
     - source_website (optional): Integer, source website ID.
+    - offset (optional): Integer, the starting position for the query (default is 0).
 
     Output:
     JSON array of news items, each containing:
@@ -597,10 +591,15 @@ def ai_news_list():
     data = request.json
     ai_model = data.get('ai_model', None)
     source_website = data.get('source_website', None)
+    offset = data.get('offset', 0)
 
     # Validate required parameters
     if not ai_model or ai_model not in AI_MODEL_ENUM:
         return jsonify({"error": "Invalid or missing 'ai_model' parameter."}), 400
+
+    # Validate optional parameters
+    if not isinstance(offset, int) or offset < 0:
+        return jsonify({"error": "'offset' must be a non-negative integer."}), 400
 
     # Build SQL query with optional filtering
     query = '''
@@ -620,7 +619,8 @@ def ai_news_list():
         query += " AND news.source_website = ?"
         params.append(source_website)
 
-    query += " ORDER BY news.news_time DESC LIMIT 10;"
+    query += " ORDER BY news.news_time DESC LIMIT 10 OFFSET ?"
+    params.append(offset)
 
     # Execute query
     rows = query_db(query, params)
