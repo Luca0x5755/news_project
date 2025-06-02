@@ -99,8 +99,10 @@
           data.forEach((news) => {
             const card = document.createElement("div");
             card.className = "card";
+
+            // 動態生成卡片內容，若圖片連結為 null 則不顯示圖片標籤
             card.innerHTML = `
-              <img src="${news.image_url}" alt="News Image" />
+              ${news.image_url ? `<img src="${news.image_url}" alt="News Image" />` : ""}
               <div class="card-content">
                 <div class="card-title">${news.ai_title}</div>
                 <div class="card-meta">${news.time} | 來源：${news.source_website}</div>
