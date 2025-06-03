@@ -11,6 +11,8 @@ config = ConfigParser()
 config.read('config.ini')
 WEB_API_ADDRESS = f"{config['WEB_SERVER']['host']}:{config['WEB_SERVER']['port']}"
 
+# TODO 限制爬取的時間區間
+
 headers = {
     'accept': '*/*',
     'accept-language': 'zh-TW,zh;q=0.9,en;q=0.8',
@@ -40,8 +42,8 @@ def get_ttv_news_list():
 
     category_list = ['政治', '國際', '社會', '娛樂', '生活', '氣象', '地方', '健康', '體育', '財經']
     for category in category_list:
-        # 1~40 ok
-        for i in range(40, 60):
+        # 1~60 ok
+        for i in range(35, 90):
             req_news = []
             # 政治, 國際, 社會
             res = requests.get(f'https://news.ttv.com.tw/category/{category}/{i}', headers=my_headers)
@@ -50,6 +52,14 @@ def get_ttv_news_list():
             for news in news_list:
                 news_title = news.select('div.title')[0].text.strip()
                 news_time = news.select('div.time')[0].text.strip()
+
+                dt_object = datetime.strptime(news_time, "%Y.%m.%d %H:%M")
+                # 判斷時間
+                if dt_object.year < 2024:
+                    continue
+
+                news_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+
                 news_time = format_datetime(news_time)
                 link = news['href']
                 # print(f'標題: {news_title}')
@@ -64,7 +74,7 @@ def get_ttv_news_list():
             res_objs = json.loads(res.text)
             success_count = len(res_objs['success'])
             errors_count = len(res_objs['errors'])
-            print(f'上傳成功: {success_count}, 上傳失敗: {errors_count}')
+            print(f'{category} 第{i}頁 上傳成功: {success_count}, 上傳失敗: {errors_count}')
             time.sleep(random.randint(1,3))
             # if success_count == 0:
             #     print(f'{category}類別已查詢完成')
@@ -120,15 +130,15 @@ def get_ttv_news():
         response = requests.put(f'http://{WEB_API_ADDRESS}/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
 
-        time.sleep(random.randint(2,7))
+        time.sleep(random.randint(0,3))
     return 1
 
 def get_setn_news():
-    # max 1664942, min 1660393
+    # max 1664942, min 1654698
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     }
-    for i in range(1660393, 1660000, -1):
+    for i in range(1654698, 1650000, -1):
         link = f'https://www.setn.com//News.aspx?NewsID={i}&utm_campaign=viewallnews'
         response = requests.get(link, headers=headers)
         soup = BeautifulSoup(response.text, 'lxml')
@@ -188,9 +198,8 @@ def get_setn_news():
 def get_ebc_news_list():
     # 取新聞清單
     category_list = ['politics', 'living', 'society', 'world', 'sport', 'business', 'health']
-    for category in category_list[4:5]:
-        req_news = []
-        for i in range(1, 2):
+    for category in category_list:
+        for i in range(30, 50):
 
             data = {
                 'cate_code': category,
@@ -202,7 +211,7 @@ def get_ebc_news_list():
 
             soup = BeautifulSoup(response.text, 'lxml')
             news_list = soup.select('a.item.col3')
-
+            req_news = []
             for news in news_list:
                 news_title = news['title']
 
@@ -219,12 +228,12 @@ def get_ebc_news_list():
             print(res_objs['errors'])
             print(f'上傳成功: {success_count}, 上傳失敗: {errors_count}')
             time.sleep(random.randint(1,3))
-            if success_count == 0:
-                print(f'{category}類別已查詢完成')
-                break
+            # if success_count == 0:
+            #     print(f'{category}類別已查詢完成')
+            #     break
 
 def get_ebc_news():
-    res = requests.post(f'http://{WEB_API_ADDRESS}/wait_query_list', json={'source_website': 3, 'count': 1})
+    res = requests.post(f'http://{WEB_API_ADDRESS}/wait_query_list', json={'source_website': 3, 'count': 10})
     query_list = json.loads(res.text)
 
 
@@ -237,8 +246,9 @@ def get_ebc_news():
         res = requests.get(query_data['news_url'], headers=headers)
         soup = BeautifulSoup(res.text, 'lxml')
 
-        ld_json_scripts = soup.find('script', type='application/ld+json')
-        data = json.loads(ld_json_scripts.string)[0]
+        ld_json_scripts = soup.find('script', type='application/ld+json').string
+        ld_json_scripts = re.sub(r"[\x00-\x1F\x7F]", "", ld_json_scripts)
+        data = json.loads(ld_json_scripts)[0]
 
         # 標題
         title = data['headline']
@@ -263,8 +273,8 @@ def get_ebc_news():
         author = author[1] if author else data['author']['name']
 
         # 日期時間
-        dt = datetime.fromisoformat(data['dateCreated'])
-        news_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+        dt_object = datetime.fromisoformat(data['dateCreated'])
+        news_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
         json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'news_time': news_time, 'query_state': 2}
 
@@ -272,22 +282,22 @@ def get_ebc_news():
         print(json_data)
         print('id:', query_data['id'], response.reason)
 
-        time.sleep(random.randint(2,7))
+        time.sleep(random.randint(1,3))
     return 1
 
 # def main():
 
 if __name__ == '__main__':
     # get_ttv_news_list()
-    # while True:
-    #     is_wait_qurey = get_ttv_news()
-    #     if is_wait_qurey == 0:
-    #         break
+    while True:
+        is_wait_qurey = get_ttv_news()
+        if is_wait_qurey == 0:
+            break
 
     # get_setn_news()
 
-    get_ebc_news_list()
-    while True:
-        is_wait_qurey = get_ebc_news()
-        if is_wait_qurey == 0:
-            break
+    # get_ebc_news_list()
+    # while True:
+    #     is_wait_qurey = get_ebc_news()
+    #     if is_wait_qurey == 0:
+    #         break

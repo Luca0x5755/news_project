@@ -116,7 +116,7 @@
                 </div>
                 <div class="modal-body">
                   <div>
-                    <img src="https://cdn.ttv.com.tw/manasystem/FileData/News/d4f7928e-2a38-4a07-bb05-9a4fa985fda1.jpg" style="width: 450px;" onclick="fetchNewsDetails(221)" alt="News Image">
+                    <img src="https://cdn.ttv.com.tw/manasystem/FileData/News/d4f7928e-2a38-4a07-bb05-9a4fa985fda1.jpg" style="width: 450px;">
                     <br>
                     <br>
                     <p>曾參加過歌唱比賽、長相神似歌手羅志祥的林姓直播主，竟涉及詐騙案，警方查獲他指揮小弟，鎖定曾遭到靈骨塔詐騙的被害人，佯稱有買家高價收購「生基位」等殯葬商品為誘餌進行詐騙，總金額破5400萬，拿去買瑪莎拉蒂跑車，如今被刑事局拘提到案，遭起訴收押。</p>
@@ -137,7 +137,7 @@
                           模型：gemma3:12b-it-qat
                         </button>
                       </h2>
-                      <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+                      <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
                         <div class="accordion-body">
                           <p>生成標題：直播主涉嫌詐騙高齡婦女破5400萬，羅志祥神似外貌曾是幫眾。</p>
                           <p>語意分析：負面</p>
@@ -145,14 +145,15 @@
                       </div>
                     </div>
                   </div>
+
                   <div class="accordion" id="accordionExample">
                     <div class="accordion-item">
                       <h2 class="accordion-header">
-                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#gemma3:4b-it-qat" aria-expanded="true" aria-controls="gemma3:4b-it-qat">
                           模型：gemma3:4b-it-qat
                         </button>
                       </h2>
-                      <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+                      <div id="gemma3:4b-it-qat" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
                         <div class="accordion-body">
                           <p>生成標題：神似羅志祥的林姓直播主涉詐騙，遭刑事局起訴，財損逾54億。</p>
                           <p>語意分析：負面</p>
@@ -184,7 +185,7 @@
         isLoading.value = true;
 
         try {
-          const response = await fetch("http://127.0.0.1:7000/api/ai_news", {
+          const response = await fetch("http://{{ domain }}/api/ai_news", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -211,7 +212,7 @@
 
             // 動態生成卡片內容，若圖片連結為 null 則不顯示圖片標籤
             card.innerHTML = `
-              ${news.image_url ? `<img src="${news.image_url}" onclick="fetchNewsDetails(${news.news_id})" alt="News Image" />` : ""}
+              ${news.image_url ? `<img src="${news.image_url}" onclick="fetchNewsDetails(${news.news_id})" />` : ""}
               <div class="card-content">
                 <div class="card-title" onclick="fetchNewsDetails(${news.news_id})">${news.ai_title}</div>
                 <div class="card-meta">${news.time} | 來源：<a href="${news.news_url}" target="_blank" style="color:rgb(0, 128, 255);">${news.source_website}</a></div>
@@ -241,10 +242,70 @@
         fetchNews();
       });
 
-        function fetchNewsDetails(news_id) {
-            // 使用 Bootstrap 提供的模態控制 API
-            var exampleModal = new bootstrap.Modal(document.getElementById('exampleModal'));
-            exampleModal.show(); // 顯示模態視窗
+        async function fetchNewsDetails(news_id) {
+          console.log(`http://{{ domain }}/api/ai_news/${news_id}`)
+          const response = await fetch(`http://{{ domain }}/api/ai_news/${news_id}`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(),
+          });
+
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+
+          const data = await response.json();
+          console.log(data)
+
+          // 選取模態視窗元素
+          const modalTitle = document.querySelector("#exampleModalLabel");
+          const modalBody = document.querySelector(".modal-body");
+
+          console.log(modalTitle)
+          console.log(modalBody)
+
+          // ----
+          // 插入新聞標題
+          modalTitle.textContent = data.news_title;
+
+          // 插入圖片與新聞內容
+          const contentHtml = `
+              <img src="${data.image_url}" style="width: 450px;">
+              <br><br>
+              <p>${data.news_content}</p>
+              <div class="card-meta">${data.news_time} | 來源：<a href="${data.news_url}" target="_blank" style="color:rgb(0, 128, 255);">${data.source_website}</a></div>
+          `;
+          modalBody.innerHTML = ""; // 清空內容
+          modalBody.insertAdjacentHTML("afterbegin", contentHtml);
+
+          // 插入 AI 模型細節 (使用 accordion)
+          const accordionHtml = data.ai_details.map((detail, index) => `
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}" aria-expanded="true" aria-controls="collapse${index}">
+                    模型：${detail.ai_model}
+                  </button>
+                </h2>
+                <div id="collapse${index}" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+                  <div class="accordion-body">
+                    <p>生成標題：${detail.ai_title}</p>
+                    <p>語意分析：${detail.ai_sentiment_analysis}</p>
+                  </div>
+                </div>
+              </div>
+          `).join("");
+
+          const accordionContainer = document.createElement("div");
+          accordionContainer.className = "accordion";
+          accordionContainer.id = "accordionExample";
+          accordionContainer.innerHTML = accordionHtml;
+          modalBody.appendChild(accordionContainer);
+
+          // 使用 Bootstrap 提供的模態控制 API
+          var exampleModal = new bootstrap.Modal(document.getElementById('exampleModal'));
+          exampleModal.show(); // 顯示模態視窗
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
