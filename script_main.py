@@ -11,6 +11,8 @@ config = ConfigParser()
 config.read('config.ini')
 WEB_API_ADDRESS = f"{config['WEB_SERVER']['host']}:{config['WEB_SERVER']['port']}"
 
+# TODO 限制爬取的時間區間
+
 headers = {
     'accept': '*/*',
     'accept-language': 'zh-TW,zh;q=0.9,en;q=0.8',
@@ -50,6 +52,14 @@ def get_ttv_news_list():
             for news in news_list:
                 news_title = news.select('div.title')[0].text.strip()
                 news_time = news.select('div.time')[0].text.strip()
+
+                dt_object = datetime.strptime(news_time, "%Y.%m.%d %H:%M")
+                # 判斷時間
+                if dt_object.year < 2024:
+                    continue
+
+                news_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+
                 news_time = format_datetime(news_time)
                 link = news['href']
                 # print(f'標題: {news_title}')
@@ -120,7 +130,7 @@ def get_ttv_news():
         response = requests.put(f'http://{WEB_API_ADDRESS}/news/{query_data['id']}', json=json_data)
         print('id:', query_data['id'], response.reason)
 
-        time.sleep(random.randint(2,7))
+        time.sleep(random.randint(0,3))
     return 1
 
 def get_setn_news():
@@ -263,8 +273,8 @@ def get_ebc_news():
         author = author[1] if author else data['author']['name']
 
         # 日期時間
-        dt = datetime.fromisoformat(data['dateCreated'])
-        news_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+        dt_object = datetime.fromisoformat(data['dateCreated'])
+        news_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
         json_data = {'news_title': title, 'news_content': content, 'image_url': src, 'keywords': keywords, 'category': category, 'author': author, 'news_time': news_time, 'query_state': 2}
 
@@ -279,15 +289,15 @@ def get_ebc_news():
 
 if __name__ == '__main__':
     # get_ttv_news_list()
-    # while True:
-    #     is_wait_qurey = get_ttv_news()
-    #     if is_wait_qurey == 0:
-    #         break
+    while True:
+        is_wait_qurey = get_ttv_news()
+        if is_wait_qurey == 0:
+            break
 
     # get_setn_news()
 
     # get_ebc_news_list()
-    while True:
-        is_wait_qurey = get_ebc_news()
-        if is_wait_qurey == 0:
-            break
+    # while True:
+    #     is_wait_qurey = get_ebc_news()
+    #     if is_wait_qurey == 0:
+    #         break

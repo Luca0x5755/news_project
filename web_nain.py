@@ -734,7 +734,8 @@ def ai_news_detail(news_id):
 
 @app.route('/')
 def index():
-    return render_template('news.html')
+    domain = request.host
+    return render_template('news.html', domain=domain)
 
 def main():
     config = ConfigParser()
