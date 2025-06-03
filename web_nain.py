@@ -262,6 +262,7 @@ def fetch_waiting_ai_news(cursor, count, model):
         FROM news
         LEFT JOIN ai_news ON ai_news.ai_model = ? and news.id = ai_news.news_id
         WHERE news.query_state = 2 AND ai_news.ai_model IS NULL
+        ORDER BY news_time DESC
         LIMIT ?;
     '''
     cursor.execute(query, (model, count))

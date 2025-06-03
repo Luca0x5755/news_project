@@ -62,7 +62,7 @@ class ChatSession:
 4. 語意分析：
 - 分析內容的情感類別，並回答是正面、負面還是中立。
 5. 將以上結果轉換成json格式
-- {"title": "標題結果", "category": ["分類結果1", "分類結果2"], "keyword": ["關鍵字結果1", "關鍵字結果2"], "sentiment_analysis": "語意分析結果"}
+- {"title": "標題結果", "category": ["分類結果1", "分類結果2"], "keyword": ["關鍵字結果1", "關鍵字結果2"], "sentiment_analysis": "正面、負面、中立", "sentiment_analysis_detail": "分析結果"}
                 """
             }
         ]
