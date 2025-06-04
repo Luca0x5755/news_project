@@ -4,6 +4,7 @@ import json
 import configparser
 import time
 from configparser import ConfigParser
+import traceback
 
 config = ConfigParser()
 config.read('config.ini')
@@ -58,11 +59,10 @@ class ChatSession:
 3. 關鍵字：
 - 提取最多5個核心的名詞，包含團體、政黨、名人、技術。
 - 名人需判斷是否為政治人物，是政治人物需加上政黨名稱。
-- 使用", "作為關鍵字的間格符號。
 4. 語意分析：
 - 分析內容的情感類別，並回答是正面、負面還是中立。
 5. 將以上結果轉換成json格式
-- {"title": "標題結果", "category": ["分類結果1", "分類結果2"], "keyword": ["關鍵字結果1", "關鍵字結果2"], "sentiment_analysis": "正面、負面、中立", "sentiment_analysis_detail": "分析結果"}
+- {"title": "標題結果", "category": ["分類結果1", "分類結果2"], "keywords": ["關鍵字結果1", "關鍵字結果2"], "sentiment_analysis": "正面、負面、中立", "sentiment_analysis_detail": "分析結果"}
                 """
             }
         ]
@@ -98,7 +98,6 @@ def process_and_add_ai_news(token, news_list, model):
         jsondata = session.chat(news['news_content'])
         if not jsondata:
             continue
-
         try:
             content1 = jsondata['choices'][0]['message']['content']
             re_obj = re.search(r'```json(.*?)```', content1, re.DOTALL)
@@ -112,6 +111,7 @@ def process_and_add_ai_news(token, news_list, model):
             else:
                 print("新增失敗:", response.status_code, response.json())
         except Exception as e:
+            traceback.print_exc()
             print("處理失敗：", news['id'], e)
 
 if __name__ == "__main__":

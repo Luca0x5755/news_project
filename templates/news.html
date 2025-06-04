@@ -111,58 +111,10 @@
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">神似羅志祥的林姓直播主涉詐騙，遭刑事局起訴，財損逾54億。</h5>
+                    <h5 class="modal-title" id="exampleModalLabel"></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <div>
-                    <img src="https://cdn.ttv.com.tw/manasystem/FileData/News/d4f7928e-2a38-4a07-bb05-9a4fa985fda1.jpg" style="width: 450px;">
-                    <br>
-                    <br>
-                    <p>曾參加過歌唱比賽、長相神似歌手羅志祥的林姓直播主，竟涉及詐騙案，警方查獲他指揮小弟，鎖定曾遭到靈骨塔詐騙的被害人，佯稱有買家高價收購「生基位」等殯葬商品為誘餌進行詐騙，總金額破5400萬，拿去買瑪莎拉蒂跑車，如今被刑事局拘提到案，遭起訴收押。</p>
-                    <p>大批刑警衝進大樓住宅時，嫌犯被嚇到來不及反應，他的愛犬也倉皇逃出房間，他是詐騙集團主謀，在搞詐騙前是直播主，還曾參加歌唱比賽，因為長相神似亞洲舞王羅志祥，被網友發掘卻被翻出過去，曾是竹聯幫幫眾，這回竟走歪路轉行做詐騙。</p>
-                    <p>警方調查，林姓主嫌指揮在酒店認識的朋友擔任業務，騙取曾受生基塔位詐騙的高齡女性，誆稱有買家願意高價收購「生基塔位」估價金額從3千萬喊到1億，開著百萬休旅車載被害人到台北市區日租辦公室簽約，製造背後真的有公司經營。</p>
-                    <p>結果簽約後業務改口帳戶有問題，錢匯不進去必須先拿一筆錢做金流，以你出300萬我出500萬的說法，來說服被害人交付大筆現金，得手後就搞消失，還有人房子遭到抵押被迫搬遷連家都沒了。</p>
-                    <p>電信偵查大隊第一隊隊長韋詩亭表示，「總計財損逾新台幣5469萬元，林嫌等人訊問後以加重詐欺罪嫌等，移送台灣台北地方檢察署續辦」。</p>
-                    <p>檢警去年至今，在雙北地區逮捕林姓主嫌等15人，大量贓款、瑪莎拉蒂跑車及手機證物全被查扣，詐騙集團用不法獲利，享受榮華富貴如今成為幻影。</p>
-                    <p>台北／李亭熙、張信智 責任編輯／蔡尚晉</p>
-
-                    <p>2025-05-28 20:53:00</p>
-                  </div>
-
-                  <div class="accordion" id="accordionExample">
-                    <div class="accordion-item">
-                      <h2 class="accordion-header">
-                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-                          模型：gemma3:12b-it-qat
-                        </button>
-                      </h2>
-                      <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
-                        <div class="accordion-body">
-                          <p>生成標題：直播主涉嫌詐騙高齡婦女破5400萬，羅志祥神似外貌曾是幫眾。</p>
-                          <p>語意分析：負面</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="accordion" id="accordionExample">
-                    <div class="accordion-item">
-                      <h2 class="accordion-header">
-                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#gemma3:4b-it-qat" aria-expanded="true" aria-controls="gemma3:4b-it-qat">
-                          模型：gemma3:4b-it-qat
-                        </button>
-                      </h2>
-                      <div id="gemma3:4b-it-qat" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
-                        <div class="accordion-body">
-                          <p>生成標題：神似羅志祥的林姓直播主涉詐騙，遭刑事局起訴，財損逾54億。</p>
-                          <p>語意分析：負面</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-
                 </div>
             </div>
         </div>
@@ -190,7 +142,7 @@
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ ai_model: 2, source_website: 1, offset }),
+            body: JSON.stringify({ ai_model: 2, offset: offset }),
           });
 
           if (!response.ok) {
@@ -270,11 +222,17 @@
           // 插入新聞標題
           modalTitle.textContent = data.news_title;
 
+          text = data.news_content.split('\n')
+          .filter(paragraph => paragraph.trim() !== '') // 避免空段落
+          .map(paragraph => `<p>${paragraph}</p>`)
+          .join('');
+
+
           // 插入圖片與新聞內容
           const contentHtml = `
               <img src="${data.image_url}" style="width: 450px;">
               <br><br>
-              <p>${data.news_content}</p>
+              <p>${text}</p>
               <div class="card-meta">${data.news_time} | 來源：<a href="${data.news_url}" target="_blank" style="color:rgb(0, 128, 255);">${data.source_website}</a></div>
           `;
           modalBody.innerHTML = ""; // 清空內容

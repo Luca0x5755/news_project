@@ -160,7 +160,6 @@ def check_existing_news_batch(cursor, news_items):
     cursor.execute(sql, urls)
     return set(row['news_url'] for row in cursor.fetchall())
 
-
 def construct_insert_query(table_name, data_sample):
     """
     輸入：table_name (str), data_sample (dict)
@@ -236,6 +235,7 @@ def fetch_waiting_news(cursor, source_website, count):
         SELECT id, news_url
         FROM news
         WHERE query_state = 0 AND source_website = ?
+        ORDER BY news_time DESC
         LIMIT ?;
     """
     cursor.execute(query, (source_website, count))
@@ -508,7 +508,7 @@ def add_ai_news():
     輸入：JSON {
         title: str,
         category: list[str],
-        keyword: list[str],
+        keywords: list[str],
         sentiment_analysis: str,
         news_id: int,
         model: str
@@ -521,7 +521,7 @@ def add_ai_news():
         # 取得資料與驗證
         title = data.get('title')
         categories = data.get('category', [])
-        keywords = data.get('keyword', [])
+        keywords = data.get('keywords', [])
         sentiment_val = data.get('sentiment_analysis')
         sentiment_val = '中立' if sentiment_val == '中性' else sentiment_val
         news_id = data.get('news_id')
